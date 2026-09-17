@@ -34,7 +34,8 @@ if command -v apt-get >/dev/null 2>&1; then
     qemu-utils \
     vim \
     wget \
-    zlib1g-dev
+    zlib1g-dev \
+    nlohmann-json3-dev
   python3 -m pip install "scons==3.1.2"
   python3 -m pip install --break-system-packages gdown
 fi
@@ -52,7 +53,7 @@ fi
 
 echo build gem5
 cd gem5
-scons -j8 build/ARM/gem5.opt CXX=g++ CXXFLAGS="-std=c++17"
+scons -j32 build/ARM/gem5.opt CXX=g++ CXXFLAGS="-std=c++17"
 cd ..
 
 echo Getting ARM kernel image files for gem5
