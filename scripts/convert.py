@@ -6,7 +6,11 @@ Inputs
   skeleton m5.cpt     produced by gem5 itself (qflex_generate_checkpoint.py) with
                       the same configuration as the simulation; it provides every
                       non-CPU object, the array sizes and the misc register list
-  gem5_layout.json    produced by gen_gem5_layout.py from the gem5 sources
+  gem5 sources        the gem5 source tree (e.g. QPoints/gem5); the register
+                      layout is extracted from it by gen_gem5_layout.py at each
+                      run, so it always matches the gem5 version in use.
+                      A gem5_layout.json file is also accepted (for inspection
+                      or tests).
 
 Output
   a new m5.cpt: the skeleton with the CPU state of every core replaced, and a
@@ -16,17 +20,30 @@ Principle: a register value comes either from the snapshot or from gem5's own
 reset state (the skeleton), never from a value written in this repository.
 
 Usage
-  python3 convert.py register-info.json skeleton/m5.cpt gem5_layout.json out/m5.cpt
+  python3 convert.py register-info.json skeleton/m5.cpt <gem5 dir> out/m5.cpt
 """
 import argparse
 import json
+import os
 import re
 import sys
+import time
 from collections import OrderedDict
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from gen_gem5_layout import build_layout  # noqa: E402  (same directory)
 
 # --------------------------------------------------------------------------
 # Small helpers
 # --------------------------------------------------------------------------
+
+def load_layout(gem5):
+    """gem5 source tree -> layout extracted now; .json file -> loaded as is."""
+    if os.path.isdir(gem5):
+        return build_layout(gem5)
+    with open(gem5) as f:
+        return json.load(f)
+
 
 def hexval(s):
     return int(s, 16)
@@ -53,7 +70,12 @@ def parse_bytes(v):
 # --------------------------------------------------------------------------
 
 class Checkpoint:
+    """m5.cpt as written by gem5: optional '## ...' comment lines, then every
+    section preceded by an empty line ("\\n[name]\\n" followed by key=value lines).
+    """
+
     def __init__(self, path):
+        self.header = []                       # comment lines before the first section
         self.sections = OrderedDict()
         current = None
         with open(path) as f:
@@ -63,17 +85,22 @@ class Checkpoint:
                 if m:
                     current = OrderedDict()
                     self.sections[m.group(1)] = current
-                elif current is not None and "=" in line:
+                elif current is None:
+                    if line.startswith("#"):
+                        self.header.append(line)
+                elif "=" in line:
                     k, v = line.split("=", 1)
                     current[k] = v
 
     def write(self, path):
+        """Write in exactly the same layout as gem5's own checkpoints."""
         with open(path, "w") as f:
+            for line in self.header:
+                f.write(line + "\n")
             for name, kv in self.sections.items():
-                f.write(f"[{name}]\n")
+                f.write(f"\n[{name}]\n")
                 for k, v in kv.items():
                     f.write(f"{k}={v}\n")
-                f.write("\n")
 
 
 # --------------------------------------------------------------------------
@@ -141,8 +168,24 @@ RESET_REASONS = [
     (r"^(dbg|osl|osd|mdcc|mddtr|dlr|dspsr|dbgw|dbgb|teecr|teehbr|joscr|jmcr|"
      r"dl1data|il1data|l2ctlr|l2ectlr|l2merrsr|cpumerrsr|cpuactlr|cpuectlr|"
      r"actlr|adfsr|aifsr|afsr|l2actlr|pmswinc|pmxev|pmintenclr|oslar|isr|nmrr_s|"
-     r"prrr_s|fcseidr|tcmtr|nop)",
+     r"prrr_s|fcseidr|tcmtr|nop|ramindex)",
      "debug / implementation-defined / derived register"),
+    (r"^(cnth|cntvoff)",
+     "EL2 timer / virtual offset (no EL2; CNTVOFF is 0)"),
+    (r"^(cntv_tval|cntp_tval|cntps_tval)",
+     "TVAL timer view, computed from CVAL and the counter"),
+    (r"^spsr_(irq|abt|und|fiq)_aa64$",
+     "AArch64 view of AArch32-mode SPSRs (only used when EL2+ is AArch64 "
+     "and handles AArch32 exceptions)"),
+    (r"^(spsr|spsr_mon)$",
+     "AArch32 current/Monitor SPSR (guest runs AArch64, no EL3)"),
+    (r"^(pmovsr|pmccfiltr)$",
+     "AArch32 PMU name (AArch64 state is in the *_el0 registers)"),
+    (r"^lbi_", "operation encoding, no state"),
+    (r"^icc_(iar|eoir|hppir|dir|rpr|sgi|asgi)",
+     "GIC acknowledge / end-of-interrupt / SGI / read-only register: no stored state"),
+    (r"^icc_(hsre|mctlr|mgrpen1|msre)$",
+     "GIC Monitor/Hyp register (no EL2/EL3)"),
 ]
 
 
@@ -310,13 +353,17 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("register_info")
     ap.add_argument("skeleton")
-    ap.add_argument("layout")
+    ap.add_argument("gem5", help="gem5 source tree, or a gem5_layout.json file")
     ap.add_argument("output")
     args = ap.parse_args()
 
     qemu = json.load(open(args.register_info))
-    layout = json.load(open(args.layout))
+    layout = load_layout(args.gem5)
     cpt = Checkpoint(args.skeleton)
+    cpt.header.append(
+        f"## converted by convert.py on {time.ctime()} "
+        f"from {os.path.abspath(args.register_info)} "
+        f"(skeleton: {os.path.abspath(args.skeleton)})")
 
     qcpus = {c["cpu_id"]: c["registers"] for c in qemu["cpus"]}
     gcpus = find_cpus(cpt)
@@ -332,6 +379,8 @@ def main():
                               cpt.sections[misc_name], layout, report)
         written_any.update(written)
 
+    out_dir = os.path.dirname(os.path.abspath(args.output))
+    os.makedirs(out_dir, exist_ok=True)
     cpt.write(args.output)
 
     # ---- coverage report ------------------------------------------------------

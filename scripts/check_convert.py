@@ -2,7 +2,7 @@
 """Round-trip check: decode a converted m5.cpt and compare it with register-info.json.
 
 Usage:
-    python3 check_convert.py register-info.json converted/m5.cpt skeleton/m5.cpt gem5_layout.json
+    python3 check_convert.py register-info.json converted/m5.cpt skeleton/m5.cpt <gem5 dir | gem5_layout.json>
 
 Checks, for every CPU:
   - x0..x30 and the current SP in regs.integer (through the gem5 slot layout)
@@ -14,10 +14,13 @@ and that every non-CPU section is identical to the skeleton.
 Exit code 0 if everything matches.
 """
 import json
+import os
 import struct
 import sys
 
-from convert import Checkpoint, find_cpus, gem5_candidates, parse_bytes
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from convert import (Checkpoint, find_cpus, gem5_candidates,  # noqa: E402
+                     load_layout, parse_bytes)
 
 SYSREGS = ["SCTLR", "TTBR0_EL1", "TTBR1_EL1", "TCR_EL1", "MAIR_EL1", "VBAR",
            "ELR_EL1", "ESR_EL1", "FAR_EL1", "SPSR_EL1", "TPIDR_EL0", "TPIDR_EL1",
@@ -27,7 +30,7 @@ SYSREGS = ["SCTLR", "TTBR0_EL1", "TTBR1_EL1", "TCR_EL1", "MAIR_EL1", "VBAR",
 
 
 def main(json_path, cpt_path, skel_path, layout_path):
-    layout = json.load(open(layout_path))
+    layout = load_layout(layout_path)
     alias = layout["misc_alias"]
     qemu = {c["cpu_id"]: c["registers"] for c in json.load(open(json_path))["cpus"]}
     cpt, skel = Checkpoint(cpt_path), Checkpoint(skel_path)

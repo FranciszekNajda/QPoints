@@ -7,6 +7,9 @@ gem5's register file is read here from the gem5 sources it will run with.
 Usage:
     python3 gen_gem5_layout.py <gem5 root> > gem5_layout.json
 
+convert.py calls build_layout() directly; running this script by hand is only
+needed to inspect the layout.
+
 Reads:
     src/arch/arm/regs/int.hh   integer register file order, AArch64 X-register map
     src/arch/arm/regs/cc.hh    condition-code register order
@@ -106,9 +109,13 @@ def parse_misc_alias(src):
     return alias
 
 
-def main(root):
+def build_layout(root):
+    """Return the layout dict for the gem5 source tree at `root`.
+
+    Used directly by convert.py, so the layout always matches the gem5 sources.
+    """
     int_regs, x_slot, sp_slot = parse_int_layout(read(root, "src/arch/arm/regs/int.hh"))
-    layout = {
+    return {
         "int_regs": int_regs,
         "x_slot": x_slot,
         "sp_slot": sp_slot,
@@ -116,6 +123,11 @@ def main(root):
         "vec": parse_vec(read(root, "src/arch/arm/regs/vec.hh")),
         "misc_alias": parse_misc_alias(read(root, "src/arch/arm/regs/misc.cc")),
     }
+
+
+def main(root):
+    layout = build_layout(root)
+    int_regs = layout["int_regs"]
     json.dump(layout, sys.stdout, indent=1)
     print(f"\nint slots: {len(int_regs)}, cc: {len(layout['cc_regs'])}, "
           f"vec: {layout['vec']['NumVecRegs']}, pred: {layout['vec']['NumVecPredRegs']}, "
