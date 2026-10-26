@@ -231,6 +231,55 @@ def find_cpus(cpt):
     return dict(sorted(cpus.items()))
 
 
+# --------------------------------------------------------------------------
+# Assumption checks (document A, section 9.6 and check V8)
+# --------------------------------------------------------------------------
+
+EL23_REG = re.compile(r"_EL(2|3)$")
+
+
+def check_assumptions(qcpus):
+    """Return a list of errors if the dump contradicts what the converter assumes.
+
+    These assumptions are load-bearing: they justify leaving some registers at
+    gem5's reset value and choosing the vector path.
+      - No EL2/EL3 state (QEMU virtualization=off, secure=off): every _EL2/_EL3
+        register must be zero, otherwise that state would be silently dropped.
+      - SME inactive: SVCR == 0 and TPIDR2_EL0 == 0 (ZA/ZT0 are not transferred).
+      - SVE: z registers present together with vg, and the current vector
+        length (vg) consistent with ZCR_EL1.LEN.
+      - FEAT_TCR2 / FEAT_S1PIE unused: TCR2_EL1 and PIR*_EL1 absent or zero.
+    """
+    errors = []
+    for cpu, r in sorted(qcpus.items()):
+        h = lambda n: int(r[n], 16) if n in r else 0
+
+        nonzero_el23 = sorted(n for n, v in r.items()
+                              if EL23_REG.search(n) and int(v, 16) != 0)
+        if nonzero_el23:
+            errors.append(f"cpu{cpu}: EL2/EL3 registers hold state {nonzero_el23}; "
+                          "the converter assumes virtualization=off, secure=off")
+
+        for n in ("SVCR", "TPIDR2_EL0"):
+            if h(n) != 0:
+                errors.append(f"cpu{cpu}: {n}={r[n]} (SME state is not transferred)")
+
+        if ("z0" in r) != ("vg" in r):
+            errors.append(f"cpu{cpu}: inconsistent SVE dump (z0 and vg must "
+                          "be present together)")
+        if "vg" in r and "ZCR_EL1" in r:
+            # vg counts 64-bit granules; ZCR_EL1.LEN gives (VL / 128) - 1.
+            expected_vg = 2 * ((h("ZCR_EL1") & 0xF) + 1)
+            if h("vg") != expected_vg:
+                errors.append(f"cpu{cpu}: vg={h('vg')} but ZCR_EL1.LEN implies "
+                              f"vg={expected_vg}")
+
+        for n in ("TCR2_EL1", "PIR_EL1", "PIRE0_EL1"):
+            if h(n) != 0:
+                errors.append(f"cpu{cpu}: {n}={r[n]} (feature not transferred)")
+    return errors
+
+
 def convert_cpu(regs, xc, misc, layout, report):
     vec_info = layout["vec"]
     cpsr = hexval(regs["cpsr"])
@@ -370,6 +419,16 @@ def main():
     if sorted(qcpus) != sorted(gcpus):
         sys.exit(f"CPU count mismatch: snapshot has {len(qcpus)} CPUs, "
                  f"skeleton has {len(gcpus)}. Regenerate the skeleton.")
+
+    problems = check_assumptions(qcpus)
+    if problems:
+        print("ERROR: the snapshot contradicts the converter's assumptions:",
+              file=sys.stderr)
+        for p in problems:
+            print("  " + p, file=sys.stderr)
+        sys.exit(1)
+    print("Assumption checks passed: no EL2/EL3 state, SME inactive, "
+          "SVE length consistent, TCR2/PIR unused", file=sys.stderr)
 
     report = {"captured": set(), "id_regs": set(), "lost": set(),
               "no_gem5_equiv": set(), "errors": []}
