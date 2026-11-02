@@ -1,13 +1,17 @@
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   cat <<'EOF'
-Usage: run_gem5.sh --gem5-ckp-dir DIR --experiment NAME --snapshot NAME --inst N --cores N [--branch-trace]
+Usage: run_gem5.sh --gem5-ckp-dir DIR --experiment NAME --snapshot NAME --inst N --cores N [--cpu MODEL] [--yaml FILE] [--branch-trace]
 
-Arguments (all required):
+Arguments (required):
   --gem5-ckp-dir  Checkpoint root directory
   --experiment    Experiment name
   --snapshot      Snapshot name
   --inst          Instruction count
-  --cores         Number of cores
+  --cores         Number of cores (must match the device tree)
+
+Optional:
+  --cpu           CPU model: atomic (default), minor, hpi, o3
+  --yaml          QEMU device tree as YAML (default: ../dtb/virt.yaml)
 
 Example:
   run_gem5.sh --gem5-ckp-dir /checkpoints --experiment OoO --snapshot snapshot_0 --inst 100000 --cores 1 --branch-trace
@@ -17,7 +21,7 @@ fi
 
 export M5_PATH=$(pwd)/bin/m5
 GEM5_HOME=$(pwd)/gem5
-GEM5_CFG=$GEM5_HOME/configs/example/arm/starter_fs.py
+GEM5_CFG=$GEM5_HOME/configs/example/arm/qflex_restore.py
 
 GEM5_CKP_DIR=""
 EXPERIMENT=""
@@ -25,6 +29,8 @@ SNAPSHOT=""
 INST=""
 CORES=""
 BRANCH_TRACE=""
+CPU="atomic"
+YAML="$(pwd)/../dtb/virt.yaml"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -46,6 +52,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --cores)
       CORES="$2"
+      shift 2
+      ;;
+    --cpu)
+      CPU="$2"
+      shift 2
+      ;;
+    --yaml)
+      YAML="$2"
       shift 2
       ;;
     --branch-trace)
@@ -70,4 +84,10 @@ OUTDIR=sim_outs/${EXPERIMENT}/${SNAPSHOT}
 mkdir -p $OUTDIR
 touch ${OUTDIR}
 
-$GEM5_HOME/build/ARM/gem5.opt --debug-flags=All --outdir=${OUTDIR} --debug-file=debug.insts  $GEM5_CFG -I $INST --disk-image="${CKPT_DIR}/${SNAPSHOT}.img" --cpu atomic --restore "${CKPT_DIR}" --num-cores ${CORES} --mem-size 8192MiB --mem-channels=1
+# The disk image is optional: QEMU's dump does not contain one yet.
+DISK_ARG=""
+if [[ -f "${CKPT_DIR}/${SNAPSHOT}.img" ]]; then
+  DISK_ARG="--disk-image=${CKPT_DIR}/${SNAPSHOT}.img"
+fi
+
+$GEM5_HOME/build/ARM/gem5.opt --debug-flags=All --outdir=${OUTDIR} --debug-file=debug.insts  $GEM5_CFG --yaml "${YAML}" -I $INST ${DISK_ARG} --cpu ${CPU} --restore "${CKPT_DIR}" --num-cores ${CORES} --mem-size 8192MiB --mem-channels=1 ${BRANCH_TRACE}
