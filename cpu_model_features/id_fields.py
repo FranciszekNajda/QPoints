@@ -44,7 +44,14 @@ kind:
           in the .cfg file; sizes are matched on the gem5 side
           (phys_addr_range_64, have_large_asid_64). GIC is info because both
           QEMU and gem5 compute it on read from the machine's GICv3, and
-          gem5 stores 0 in its checkpoints.
+          gem5 stores 0 in its checkpoints. CSV2, CSV2_FRAC and CSV3 are
+          info because they are claims ("not vulnerable to Spectre v2 /
+          Meltdown"), not features: no instruction depends on them and gem5
+          does not behave differently. Lowering them only changes what the
+          guest kernel does at boot: with CSV3 = 0 (and no E0PD) it enables
+          KPTI, whose non-global kernel mappings break QFlex's WormCache MMU
+          model; with CSV2 = 0 it enables Spectre v2 mitigations. QEMU keeps
+          the model's values, like a real server CPU (e.g. Neoverse N1).
 
 Where the table comes from
 --------------------------
@@ -117,8 +124,8 @@ FIELDS = {
         ("AMU", 44, 4, LEVEL, "activity monitors"),
         ("DIT", 48, 4, LEVEL, "data-independent timing"),
         ("RME", 52, 4, LEVEL, "realm management"),
-        ("CSV2", 56, 4, LEVEL, "not vulnerable to Spectre v2"),
-        ("CSV3", 60, 4, LEVEL, "not vulnerable to Meltdown"),
+        ("CSV2", 56, 4, INFO, "not vulnerable to Spectre v2 (claim, not a feature)"),
+        ("CSV3", 60, 4, INFO, "not vulnerable to Meltdown (claim, not a feature)"),
     ],
     # Processor features 1: BTI, SSBS, MTE, SME, NMI.
     "ID_AA64PFR1_EL1": [
@@ -129,7 +136,7 @@ FIELDS = {
         ("MPAM_FRAC", 16, 4, LEVEL, "MPAM minor version"),
         ("SME", 24, 4, LEVEL, "SME"),
         ("RNDR_TRAP", 28, 4, LEVEL, "RNDR trap"),
-        ("CSV2_FRAC", 32, 4, LEVEL, "CSV2 minor version"),
+        ("CSV2_FRAC", 32, 4, INFO, "CSV2 minor version (claim, not a feature)"),
         ("NMI", 36, 4, LEVEL, "non-maskable interrupts"),
     ],
     # Memory model 0: address sizes and translation granules (mostly info), plus FGT and ECV.
@@ -183,7 +190,7 @@ FIELDS = {
         ("TTL", 48, 4, LEVEL, "TLBI translation table level hint"),
         ("BBM", 52, 4, LEVEL, "break-before-make levels"),
         ("EVT", 56, 4, LEVEL, "enhanced virtualization traps"),
-        ("E0PD", 60, 4, LEVEL, "E0PD (KPTI not needed)"),
+        ("E0PD", 60, 4, INFO, "E0PD (kept: without it, KASLR forces KPTI, which QFlex's WormCache does not support)"),
     ],
     # SVE features (only meaningful if ID_AA64PFR0.SVE != 0).
     "ID_AA64ZFR0_EL1": [
@@ -314,8 +321,12 @@ def gem5_values(path, cpu=0):
     A register gem5 does not have reads as 0 (RES0 ID space)."""
     import re
 
-    # section header of this CPU's misc registers
-    want = re.compile(rf"\.cpus{cpu}\.isa\.miscRegs\]$")
+    # Section header of this CPU's misc registers. gem5 numbers the CPUs
+    # (cpus0, cpus1, ...) only when there are several; with a single CPU
+    # the section is "...cpus.isa.miscRegs" without an index.
+    index = f"(?:{cpu})?" if cpu == 0 else f"{cpu}"
+    want = re.compile(rf"\.cpus{index}\.isa\.miscRegs\]$")
+
     out, section = {}, None
     with open(path) as f:
         for line in f:
