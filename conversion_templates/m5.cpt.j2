@@ -1,0 +1,1767 @@
+{#- m5.cpt template, made by make_template.py. Do not edit: edit the
+    references, conversion_dict.py or make_template.py and run it again.
+    Context: cpus = [{index, v: {variable: value}}] (per-CPU variables),
+    v = {variable: value} (other variables), header = comment line. #}
+{%- macro cpu_tag(cpu) -%}{{ '' if cpus|length == 1 else cpu.index }}{%- endmacro %}
+## {{ header }}
+
+[system.vncserver]
+
+[system.realview.vio]
+currState=0
+prvEvalTick=0
+
+[system.realview.vio.vio]
+guestFeatures=0
+_deviceStatus=0
+_queueSelect=0
+
+[system.realview.vio.power_state]
+currState=0
+prvEvalTick=0
+
+[system.realview.vio.interrupt]
+
+[system.realview.uart]
+control=768
+fbrd=0
+ibrd=0
+lcrh=0
+ifls=18
+imsc_serial=0
+rawInt_serial=0
+
+[system.realview.uart.power_state]
+currState=0
+prvEvalTick=0
+
+[system.realview.uart.interrupt]
+
+[system.terminal]
+
+[system.realview.rtc]
+timeVal=1230768000
+lastWrittenTick=0
+loadVal=0
+matchVal=0
+rawInt=false
+maskInt=false
+pendingInt=false
+is_in_event=false
+
+[system.realview.rtc.power_state]
+currState=0
+prvEvalTick=0
+
+[system.realview.rtc.interrupt]
+
+[system.realview.pci_bus]
+currState=0
+prvEvalTick=0
+
+[system.realview.pci_bus.power_state]
+currState=0
+prvEvalTick=0
+
+[system.realview.gic]
+
+[system.realview.gic.distributor]
+ARE=true
+DS=true
+EnableGrp1S=false
+EnableGrp1NS=false
+EnableGrp0=false
+irqGroup=0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+irqEnabled=false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false
+irqPending=false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false
+irqPendingIspendr=false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false
+irqActive=false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false
+irqPriority=170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170 170
+irqConfig=0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+irqGrpmod=0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+irqNsacr=0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+irqAffinityRouting=0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+{# TODO GICv3: state not dumped by QEMU yet, gem5 reset values #}
+{% for cpu in cpus %}
+
+[system.realview.gic.redistributors.{{ cpu.index }}]
+peInLowPowerState={{ cpu.v["redist:peInLowPowerState"] }}
+irqGroup=0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+irqEnabled=false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false
+irqPending=false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false
+irqPendingIspendr=false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false
+irqActive=false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false false
+irqPriority=0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+irqConfig=1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1
+irqGrpmod=0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+irqNsacr=0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+DPG1S=false
+DPG1NS=false
+DPG0=false
+EnableLPIs=false
+lpiConfigurationTablePtr=0
+lpiIDBits=0
+lpiPendingTablePtr=0
+{% endfor %}
+{# TODO GICv3: state not dumped by QEMU yet, gem5 reset values #}
+{% for cpu in cpus %}
+
+[system.realview.gic.cpuInterface.{{ cpu.index }}]
+hppi.intid=1023
+hppi.prio=255
+hppi.group=0
+{% endfor %}
+
+[system.realview.gic.power_state]
+currState=0
+prvEvalTick=0
+
+[system.realview.gic.maint_int]
+
+[system.realview.gic.its]
+gitsControl=2147483648
+gitsTyper=805453569
+gitsCbaser=0
+gitsCreadr=0
+gitsCwriter=0
+gitsIidr=0
+tableBases=74027918874902528 290200700988686336 0 0 0 0 0 0
+
+[system.realview.gic.its.power_state]
+currState=0
+prvEvalTick=0
+
+[system.realview.generic_timer]
+cpu_count={{ v["system.realview.generic_timer:cpu_count"] }}
+{# Generic timer of each CPU (src/dev/arm/generic_timer.cc). Absent
+   from the references: gem5 creates the timers at their first access. #}
+{% if v["system.realview.generic_timer:cpu_count"]|int > 0 %}
+{% for cpu in cpus %}
+
+[system.realview.generic_timer.pe_implementation{{ cpu.index }}]
+cntfrq={{ cpu.v["timer:cntfrq"] }}
+cntkctl={{ cpu.v["timer:cntkctl"] }}
+cnthctl=0
+phys_ev_scheduled=false
+physEvStream.transitionTo=0
+physEvStream.transitionBit=0
+virt_ev_scheduled={{ cpu.v["timer:virt_ev_scheduled"] }}
+{% if cpu.v["timer:virt_ev_scheduled"] == "true" %}
+virt_ev_when={{ cpu.v["timer:virt_ev_when"] }}
+{% endif %}
+virtEvStream.transitionTo={{ cpu.v["timer:virtEvStream.transitionTo"] }}
+virtEvStream.transitionBit={{ cpu.v["timer:virtEvStream.transitionBit"] }}
+
+[system.realview.generic_timer.pe_implementation{{ cpu.index }}.phys_el3_timer]
+control_serial=0
+_counterLimit=0
+_offset=0
+
+[system.realview.generic_timer.pe_implementation{{ cpu.index }}.phys_el1_timer]
+control_serial={{ cpu.v["timer.phys_el1_timer:control_serial"] }}
+_counterLimit={{ cpu.v["timer.phys_el1_timer:_counterLimit"] }}
+_offset=0
+
+[system.realview.generic_timer.pe_implementation{{ cpu.index }}.virt_el1_timer]
+control_serial={{ cpu.v["timer.virt_el1_timer:control_serial"] }}
+_counterLimit={{ cpu.v["timer.virt_el1_timer:_counterLimit"] }}
+_offset={{ cpu.v["timer.virt_el1_timer:_offset"] }}
+
+[system.realview.generic_timer.pe_implementation{{ cpu.index }}.phys_ns_el2_timer]
+control_serial=0
+_counterLimit=0
+_offset=0
+
+[system.realview.generic_timer.pe_implementation{{ cpu.index }}.virt_ns_el2_timer]
+control_serial=0
+_counterLimit=0
+_offset=0
+
+[system.realview.generic_timer.pe_implementation{{ cpu.index }}.phys_s_el2_timer]
+control_serial=0
+_counterLimit=0
+_offset=0
+
+[system.realview.generic_timer.pe_implementation{{ cpu.index }}.virt_s_el2_timer]
+control_serial=0
+_counterLimit=0
+_offset=0
+{% endfor %}
+{% endif %}
+
+[system.realview.generic_timer.int_el3_phys]
+
+[system.realview.generic_timer.int_el2_s_virt]
+
+[system.realview.generic_timer.int_el2_s_phys]
+
+[system.realview.generic_timer.int_el2_ns_virt]
+
+[system.realview.generic_timer.int_el2_ns_phys]
+
+[system.realview.generic_timer.int_el1_virt]
+
+[system.realview.generic_timer.int_el1_phys]
+
+[system.realview.sys_counter]
+_enabled=true
+_freq=62500000
+_value={{ v["system.realview.sys_counter:_value"] }}
+_increment=1
+_freqTable=62500000 0
+_activeFreqEntry=0
+_updateTick={{ v["system.realview.sys_counter:_updateTick"] }}
+pending_freq_update=false
+_nextFreqEntry=0
+
+[system.realview.fixed_clock24MHz]
+_perfLevel=0
+
+[system.realview.io_voltage]
+_perfLevel=0
+
+[system.pci_devices]
+_config.data=244 26 0 16 0 0 0 0 0 0 0 255 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 244 26 2 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0 0
+pmcap.pid=0
+pmcap.pc=0
+pmcap.pmcs=0
+msicap.mid=0
+msicap.mc=0
+msicap.ma=0
+msicap.mua=0
+msicap.md=0
+msicap.mmask=0
+msicap.mpend=0
+msixcap.mxid=0
+msixcap.mxc=0
+msixcap.mtab=0
+msixcap.mpba=0
+pxcap.pxid=0
+pxcap.pxcap=0
+pxcap.pxdcap=0
+pxcap.pxdc=0
+pxcap.pxds=0
+pxcap.pxlcap=0
+pxcap.pxlc=0
+pxcap.pxls=0
+pxcap.pxscap=0
+pxcap.pxsc=0
+pxcap.pxss=0
+pxcap.pxrcap=0
+pxcap.pxrc=0
+pxcap.pxrs=0
+pxcap.pxdcap2=0
+pxcap.pxdc2=0
+pxcap.pxds2=0
+pxcap.pxlcap2=0
+pxcap.pxlc2=0
+pxcap.pxls2=0
+pxcap.pxscap2=0
+pxcap.pxsc2=0
+pxcap.pxss2=0
+
+[system.pci_devices.vio]
+guestFeatures=0
+_deviceStatus=0
+_queueSelect=0
+
+[system.pci_devices.vio._queues.0]
+_address=0
+_last_avail=0
+
+[system.pci_devices.vio.image]
+
+[system.realview.pci_host]
+currState=0
+prvEvalTick=0
+
+[system.realview.pci_host.up_to_down]
+currState=0
+prvEvalTick=0
+
+[system.realview.pci_host.up_to_down.power_state]
+currState=0
+prvEvalTick=0
+
+[system.realview.pci_host.power_state]
+currState=0
+prvEvalTick=0
+
+[system.realview]
+
+[system.realview.pci_host.down_to_up]
+currState=0
+prvEvalTick=0
+
+[system.realview.pci_host.down_to_up.power_state]
+currState=0
+prvEvalTick=0
+
+[system.realview.pci_host.config_error]
+currState=0
+prvEvalTick=0
+
+[system.realview.pci_host.config_error.power_state]
+currState=0
+prvEvalTick=0
+
+[system.pci_devices.power_state]
+currState=0
+prvEvalTick=0
+
+[system.pci_devices.BAR5]
+
+[system.pci_devices.BAR4]
+
+[system.pci_devices.BAR3]
+
+[system.pci_devices.BAR2]
+
+[system.pci_devices.BAR1]
+
+[system.pci_devices.BAR0]
+
+[system.membus.badaddr_responder]
+currState=0
+prvEvalTick=0
+
+[system.membus.badaddr_responder.power_state]
+currState=0
+prvEvalTick=0
+
+[system.membus]
+currState=0
+prvEvalTick=0
+
+[system.membus.snoop_filter]
+
+[system.membus.power_state]
+currState=0
+prvEvalTick=0
+
+[system.mem_ctrls]
+currState=0
+prvEvalTick=0
+
+[system.mem_ctrls.power_state]
+currState=0
+prvEvalTick=0
+
+[system.iobus]
+currState=0
+prvEvalTick=0
+
+[system.iobus.power_state]
+currState=0
+prvEvalTick=0
+
+[system.iobridge]
+currState=0
+prvEvalTick=0
+
+[system.iobridge.power_state]
+currState=0
+prvEvalTick=0
+
+[system.dvfs_handler]
+enableHandler=false
+domain_ids=
+perf_levels=
+whens=
+
+[system.dmabridge]
+currState=0
+prvEvalTick=0
+
+[system.dmabridge.power_state]
+currState=0
+prvEvalTick=0
+{% for cpu in cpus|reverse %}
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}]
+instCnt=5
+_pid=4294967295
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.xc.0]
+interrupts=false false false false false false false
+intStatus=0
+_status=0
+regs.integer={{ cpu.v["xc:regs.integer"] }}
+regs.floating_point=
+regs.vector={{ cpu.v["xc:regs.vector"] }}
+regs.vector_element={{ cpu.v["xc:regs.vector_element"] }}
+regs.vector_predicate={{ cpu.v["xc:regs.vector_predicate"] }}
+regs.matrix={{ cpu.v["xc:regs.matrix"] }}
+regs.condition_code={{ cpu.v["xc:regs.condition_code"] }}
+_pc={{ cpu.v["xc:_pc"] }}
+_upc=0
+_npc={{ cpu.v["xc:_npc"] }}
+_nupc=1
+flags=4
+_size=0
+nextFlags=4
+_itstate=0
+_nextItstate=0
+_illegalExec=false
+_debugStep=false
+_stepped=false
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.tracer]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.tracer.disassembler]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.power_state]
+currState=1
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units7]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units7.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units6]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units6.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units5]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units5.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units4]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units4.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units3]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units3.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units2]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units2.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units1]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units1.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units0]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_units0.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_unit_func_s2]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_unit_func_s2.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_unit_func_s1]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.walk_unit_func_s1.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.walker.power_state]
+currState=0
+prvEvalTick=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.stage2_itb]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.stage2_itb.replacement_policy]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.stage2_itb.indexing_policy]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.stage2_dtb]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.stage2_dtb.replacement_policy]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.stage2_dtb.indexing_policy]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.itb]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.itb.replacement_policy]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.itb.indexing_policy]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.dtb]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.dtb.replacement_policy]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.l2_shared]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.l2_shared.replacement_policy]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.l2_shared.indexing_policy]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.mmu.dtb.indexing_policy]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.interrupts]
+interrupts=false false false false false false false
+intStatus=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.decoder]
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.isa]
+isaName=arm
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.isa.miscRegs]
+cpsr={{ cpu.v["misc:cpsr"] }}
+spsr=0
+spsr_fiq={{ cpu.v["misc:spsr_fiq"] }}
+spsr_irq={{ cpu.v["misc:spsr_irq"] }}
+spsr_svc={{ cpu.v["misc:spsr_svc"] }}
+spsr_mon=0
+spsr_abt={{ cpu.v["misc:spsr_abt"] }}
+spsr_hyp=0
+spsr_und={{ cpu.v["misc:spsr_und"] }}
+elr_hyp=0
+fpsid=1090793632
+fpscr=0
+mvfr1={{ cpu.v["misc:mvfr1"] }}
+mvfr0={{ cpu.v["misc:mvfr0"] }}
+fpexc=0
+cpsr_mode=0
+cpsr_q=0
+fpscr_exc=0
+fpscr_qc=0
+lockaddr=0
+lockflag=0
+prrr_mair0=0
+prrr_mair0_ns=0
+prrr_mair0_s=0
+nmrr_mair1=0
+nmrr_mair1_ns=0
+nmrr_mair1_s=0
+pmxevtyper_pmccfiltr=0
+sev_mailbox=1
+tlbi_needsync=0
+dbgdidr=393216
+dbgdscrint={{ cpu.v["misc:dbgdscrint"] }}
+dbgdccint=0
+dbgdtrtxint=0
+dbgdtrrxint=0
+dbgwfar=0
+dbgvcr=0
+dbgdtrrxext={{ cpu.v["misc:dbgdtrrxext"] }}
+dbgdscrext={{ cpu.v["misc:dbgdscrext"] }}
+dbgdtrtxext={{ cpu.v["misc:dbgdtrtxext"] }}
+dbgoseccr={{ cpu.v["misc:dbgoseccr"] }}
+dbgbvr0={{ cpu.v["misc:dbgbvr0"] }}
+dbgbvr1={{ cpu.v["misc:dbgbvr1"] }}
+dbgbvr2={{ cpu.v["misc:dbgbvr2"] }}
+dbgbvr3={{ cpu.v["misc:dbgbvr3"] }}
+dbgbvr4={{ cpu.v["misc:dbgbvr4"] }}
+dbgbvr5={{ cpu.v["misc:dbgbvr5"] }}
+dbgbvr6=0
+dbgbvr7=0
+dbgbvr8=0
+dbgbvr9=0
+dbgbvr10=0
+dbgbvr11=0
+dbgbvr12=0
+dbgbvr13=0
+dbgbvr14=0
+dbgbvr15=0
+dbgbcr0={{ cpu.v["misc:dbgbcr0"] }}
+dbgbcr1={{ cpu.v["misc:dbgbcr1"] }}
+dbgbcr2={{ cpu.v["misc:dbgbcr2"] }}
+dbgbcr3={{ cpu.v["misc:dbgbcr3"] }}
+dbgbcr4={{ cpu.v["misc:dbgbcr4"] }}
+dbgbcr5={{ cpu.v["misc:dbgbcr5"] }}
+dbgbcr6=0
+dbgbcr7=0
+dbgbcr8=0
+dbgbcr9=0
+dbgbcr10=0
+dbgbcr11=0
+dbgbcr12=0
+dbgbcr13=0
+dbgbcr14=0
+dbgbcr15=0
+dbgwvr0={{ cpu.v["misc:dbgwvr0"] }}
+dbgwvr1={{ cpu.v["misc:dbgwvr1"] }}
+dbgwvr2={{ cpu.v["misc:dbgwvr2"] }}
+dbgwvr3={{ cpu.v["misc:dbgwvr3"] }}
+dbgwvr4=0
+dbgwvr5=0
+dbgwvr6=0
+dbgwvr7=0
+dbgwvr8=0
+dbgwvr9=0
+dbgwvr10=0
+dbgwvr11=0
+dbgwvr12=0
+dbgwvr13=0
+dbgwvr14=0
+dbgwvr15=0
+dbgwcr0={{ cpu.v["misc:dbgwcr0"] }}
+dbgwcr1={{ cpu.v["misc:dbgwcr1"] }}
+dbgwcr2={{ cpu.v["misc:dbgwcr2"] }}
+dbgwcr3={{ cpu.v["misc:dbgwcr3"] }}
+dbgwcr4=0
+dbgwcr5=0
+dbgwcr6=0
+dbgwcr7=0
+dbgwcr8=0
+dbgwcr9=0
+dbgwcr10=0
+dbgwcr11=0
+dbgwcr12=0
+dbgwcr13=0
+dbgwcr14=0
+dbgwcr15=0
+dbgdrar={{ cpu.v["misc:dbgdrar"] }}
+dbgbxvr0={{ cpu.v["misc:dbgbxvr0"] }}
+dbgbxvr1={{ cpu.v["misc:dbgbxvr1"] }}
+dbgbxvr2={{ cpu.v["misc:dbgbxvr2"] }}
+dbgbxvr3={{ cpu.v["misc:dbgbxvr3"] }}
+dbgbxvr4={{ cpu.v["misc:dbgbxvr4"] }}
+dbgbxvr5={{ cpu.v["misc:dbgbxvr5"] }}
+dbgbxvr6=0
+dbgbxvr7=0
+dbgbxvr8=0
+dbgbxvr9=0
+dbgbxvr10=0
+dbgbxvr11=0
+dbgbxvr12=0
+dbgbxvr13=0
+dbgbxvr14=0
+dbgbxvr15=0
+dbgoslar=0
+dbgoslsr={{ cpu.v["misc:dbgoslsr"] }}
+dbgosdlr={{ cpu.v["misc:dbgosdlr"] }}
+dbgprcr=0
+dbgdsar=0
+dbgclaimset={{ cpu.v["misc:dbgclaimset"] }}
+dbgclaimclr={{ cpu.v["misc:dbgclaimclr"] }}
+dbgauthstatus=0
+dbgdevid2=0
+dbgdevid1=0
+dbgdevid0=0
+teecr=0
+jidr=0
+teehbr=0
+joscr=0
+jmcr=0
+midr={{ cpu.v["misc:midr"] }}
+ctr={{ cpu.v["misc:ctr"] }}
+tcmtr=0
+tlbtr=1
+mpidr=2147483648
+revidr=0
+id_pfr0={{ cpu.v["misc:id_pfr0"] }}
+id_pfr1={{ cpu.v["misc:id_pfr1"] }}
+id_dfr0={{ cpu.v["misc:id_dfr0"] }}
+id_afr0={{ cpu.v["misc:id_afr0"] }}
+id_mmfr0={{ cpu.v["misc:id_mmfr0"] }}
+id_mmfr1={{ cpu.v["misc:id_mmfr1"] }}
+id_mmfr2={{ cpu.v["misc:id_mmfr2"] }}
+id_mmfr3={{ cpu.v["misc:id_mmfr3"] }}
+id_mmfr4={{ cpu.v["misc:id_mmfr4"] }}
+id_isar0={{ cpu.v["misc:id_isar0"] }}
+id_isar1={{ cpu.v["misc:id_isar1"] }}
+id_isar2={{ cpu.v["misc:id_isar2"] }}
+id_isar3={{ cpu.v["misc:id_isar3"] }}
+id_isar4={{ cpu.v["misc:id_isar4"] }}
+id_isar5={{ cpu.v["misc:id_isar5"] }}
+id_isar6={{ cpu.v["misc:id_isar6"] }}
+ccsidr=0
+clidr=0
+aidr=0
+csselr=0
+csselr_ns={{ cpu.v["misc:csselr_ns"] }}
+csselr_s=0
+vpidr=1091555440
+vmpidr=0
+sctlr=0
+sctlr_ns={{ cpu.v["misc:sctlr_ns"] }}
+sctlr_s=815071280
+actlr=0
+actlr_ns={{ cpu.v["misc:actlr_ns"] }}
+actlr_s=0
+cpacr={{ cpu.v["misc:cpacr"] }}
+sdcr=0
+scr=1
+sder=0
+nsacr=0
+hsctlr=818219056
+hactlr=0
+hcr=0
+hcr2=0
+hdcr=0
+hcptr=0
+hstr=0
+hacr=0
+ttbr0=0
+ttbr0_ns={{ cpu.v["misc:ttbr0_ns"] }}
+ttbr0_s=0
+ttbr1=0
+ttbr1_ns={{ cpu.v["misc:ttbr1_ns"] }}
+ttbr1_s=0
+ttbcr=0
+ttbcr_ns={{ cpu.v["misc:ttbcr_ns"] }}
+ttbcr_s=0
+htcr=0
+vtcr=0
+dacr=0
+dacr_ns=0
+dacr_s=0
+dfsr=0
+dfsr_ns=0
+dfsr_s=0
+ifsr=0
+ifsr_ns=0
+ifsr_s=0
+adfsr=0
+adfsr_ns={{ cpu.v["misc:adfsr_ns"] }}
+adfsr_s=0
+aifsr=0
+aifsr_ns={{ cpu.v["misc:aifsr_ns"] }}
+aifsr_s=0
+hadfsr=0
+haifsr=0
+hsr=0
+dfar=0
+dfar_ns={{ cpu.v["misc:dfar_ns"] }}
+dfar_s=0
+ifar=0
+ifar_ns={{ cpu.v["misc:ifar_ns"] }}
+ifar_s=0
+hdfar=0
+hifar=0
+hpfar=0
+icialluis=0
+bpiallis=0
+par=0
+par_ns={{ cpu.v["misc:par_ns"] }}
+par_s=0
+iciallu=0
+icimvau=0
+cp15isb=0
+bpiall=0
+bpimva=0
+dcimvac=0
+dcisw=0
+ats1cpr=0
+ats1cpw=0
+ats1cur=0
+ats1cuw=0
+ats12nsopr=0
+ats12nsopw=0
+ats12nsour=0
+ats12nsouw=0
+dccmvac=0
+dccsw=0
+cp15dsb=0
+cp15dmb=0
+dccmvau=0
+dccimvac=0
+dccisw=0
+ats1hr=0
+ats1hw=0
+tlbiallis=0
+tlbimvais=0
+tlbiasidis=0
+tlbimvaais=0
+tlbimvalis=0
+tlbimvaalis=0
+itlbiall=0
+itlbimva=0
+itlbiasid=0
+dtlbiall=0
+dtlbimva=0
+dtlbiasid=0
+tlbiall=0
+tlbimva=0
+tlbiasid=0
+tlbimvaa=0
+tlbimval=0
+tlbimvaal=0
+tlbiipas2is=0
+tlbiipas2lis=0
+tlbiallhis=0
+tlbimvahis=0
+tlbiallnsnhis=0
+tlbimvalhis=0
+tlbiipas2=0
+tlbiipas2l=0
+tlbiallh=0
+tlbimvah=0
+tlbiallnsnh=0
+tlbimvalh=0
+pmcr={{ cpu.v["misc:pmcr"] }}
+pmcntenset={{ cpu.v["misc:pmcntenset"] }}
+pmcntenclr={{ cpu.v["misc:pmcntenclr"] }}
+pmovsr=0
+pmswinc=0
+pmselr={{ cpu.v["misc:pmselr"] }}
+pmceid0={{ cpu.v["misc:pmceid0"] }}
+pmceid1={{ cpu.v["misc:pmceid1"] }}
+pmccntr={{ cpu.v["misc:pmccntr"] }}
+pmxevtyper=0
+pmevcntr0={{ cpu.v["misc:pmevcntr0"] }}
+pmevcntr1={{ cpu.v["misc:pmevcntr1"] }}
+pmevcntr2={{ cpu.v["misc:pmevcntr2"] }}
+pmevcntr3={{ cpu.v["misc:pmevcntr3"] }}
+pmevcntr4={{ cpu.v["misc:pmevcntr4"] }}
+pmevcntr5={{ cpu.v["misc:pmevcntr5"] }}
+pmevtyper0={{ cpu.v["misc:pmevtyper0"] }}
+pmevtyper1={{ cpu.v["misc:pmevtyper1"] }}
+pmevtyper2={{ cpu.v["misc:pmevtyper2"] }}
+pmevtyper3={{ cpu.v["misc:pmevtyper3"] }}
+pmevtyper4={{ cpu.v["misc:pmevtyper4"] }}
+pmevtyper5={{ cpu.v["misc:pmevtyper5"] }}
+pmccfiltr=0
+pmxevcntr=0
+pmuserenr={{ cpu.v["misc:pmuserenr"] }}
+pmintenset={{ cpu.v["misc:pmintenset"] }}
+pmintenclr=0
+pmovsset={{ cpu.v["misc:pmovsset"] }}
+l2ctlr=0
+l2ectlr=0
+prrr=0
+prrr_ns={{ cpu.v["misc:prrr_ns"] }}
+prrr_s=0
+mair0=0
+mair0_ns=0
+mair0_s=0
+nmrr=0
+nmrr_ns={{ cpu.v["misc:nmrr_ns"] }}
+nmrr_s=0
+mair1=0
+mair1_ns=0
+mair1_s=0
+amair0=0
+amair0_ns={{ cpu.v["misc:amair0_ns"] }}
+amair0_s=0
+amair1=0
+amair1_ns={{ cpu.v["misc:amair1_ns"] }}
+amair1_s=0
+hmair0=0
+hmair1=0
+hamair0=0
+hamair1=0
+vbar=0
+vbar_ns={{ cpu.v["misc:vbar_ns"] }}
+vbar_s=0
+mvbar=0
+rmr=0
+isr=0
+hvbar=0
+fcseidr=0
+contextidr=0
+contextidr_ns={{ cpu.v["misc:contextidr_ns"] }}
+contextidr_s=0
+tpidrurw=0
+tpidrurw_ns={{ cpu.v["misc:tpidrurw_ns"] }}
+tpidrurw_s=0
+tpidruro=0
+tpidruro_ns={{ cpu.v["misc:tpidruro_ns"] }}
+tpidruro_s=0
+tpidrprw=0
+tpidrprw_ns={{ cpu.v["misc:tpidrprw_ns"] }}
+tpidrprw_s=0
+htpidr=0
+cntfrq=0
+cntpct=0
+cntvct=0
+cntp_ctl=0
+cntp_ctl_ns=0
+cntp_ctl_s=0
+cntp_cval=0
+cntp_cval_ns=0
+cntp_cval_s=0
+cntp_tval=0
+cntp_tval_ns=0
+cntp_tval_s=0
+cntv_ctl=0
+cntv_cval=0
+cntv_tval=0
+cntkctl=0
+cnthctl=0
+cnthp_ctl=0
+cnthp_cval=0
+cnthp_tval=0
+cntvoff=0
+il1data0=0
+il1data1=0
+il1data2=0
+il1data3=0
+dl1data0=0
+dl1data1=0
+dl1data2=0
+dl1data3=0
+dl1data4=0
+ramindex=0
+l2actlr=0
+cbar=0
+httbr=0
+vttbr=0
+cpumerrsr=0
+l2merrsr=0
+mdccint_el1=0
+osdtrrx_el1=0
+mdscr_el1=0
+osdtrtx_el1=0
+oseccr_el1=0
+dbgbvr0_el1=0
+dbgbvr1_el1=0
+dbgbvr2_el1=0
+dbgbvr3_el1=0
+dbgbvr4_el1=0
+dbgbvr5_el1=0
+dbgbvr6_el1=0
+dbgbvr7_el1=0
+dbgbvr8_el1=0
+dbgbvr9_el1=0
+dbgbvr10_el1=0
+dbgbvr11_el1=0
+dbgbvr12_el1=0
+dbgbvr13_el1=0
+dbgbvr14_el1=0
+dbgbvr15_el1=0
+dbgbcr0_el1=0
+dbgbcr1_el1=0
+dbgbcr2_el1=0
+dbgbcr3_el1=0
+dbgbcr4_el1=0
+dbgbcr5_el1=0
+dbgbcr6_el1=0
+dbgbcr7_el1=0
+dbgbcr8_el1=0
+dbgbcr9_el1=0
+dbgbcr10_el1=0
+dbgbcr11_el1=0
+dbgbcr12_el1=0
+dbgbcr13_el1=0
+dbgbcr14_el1=0
+dbgbcr15_el1=0
+dbgwvr0_el1=0
+dbgwvr1_el1=0
+dbgwvr2_el1=0
+dbgwvr3_el1=0
+dbgwvr4_el1=0
+dbgwvr5_el1=0
+dbgwvr6_el1=0
+dbgwvr7_el1=0
+dbgwvr8_el1=0
+dbgwvr9_el1=0
+dbgwvr10_el1=0
+dbgwvr11_el1=0
+dbgwvr12_el1=0
+dbgwvr13_el1=0
+dbgwvr14_el1=0
+dbgwvr15_el1=0
+dbgwcr0_el1=0
+dbgwcr1_el1=0
+dbgwcr2_el1=0
+dbgwcr3_el1=0
+dbgwcr4_el1=0
+dbgwcr5_el1=0
+dbgwcr6_el1=0
+dbgwcr7_el1=0
+dbgwcr8_el1=0
+dbgwcr9_el1=0
+dbgwcr10_el1=0
+dbgwcr11_el1=0
+dbgwcr12_el1=0
+dbgwcr13_el1=0
+dbgwcr14_el1=0
+dbgwcr15_el1=0
+mdccsr_el0=0
+mddtr_el0=0
+mddtrtx_el0=0
+mddtrrx_el0=0
+dbgvcr32_el2=0
+mdrar_el1=0
+oslar_el1=0
+oslsr_el1=0
+osdlr_el1=0
+dbgprcr_el1=0
+dbgclaimset_el1=0
+dbgclaimclr_el1=0
+dbgauthstatus_el1=0
+teecr32_el1=0
+teehbr32_el1=0
+midr_el1=0
+mpidr_el1=0
+revidr_el1={{ cpu.v["misc:revidr_el1"] }}
+id_pfr0_el1=0
+id_pfr1_el1=0
+id_dfr0_el1=0
+id_afr0_el1=0
+id_mmfr0_el1=0
+id_mmfr1_el1=0
+id_mmfr2_el1=0
+id_mmfr3_el1=0
+id_mmfr4_el1=0
+id_isar0_el1=0
+id_isar1_el1=0
+id_isar2_el1=0
+id_isar3_el1=0
+id_isar4_el1=0
+id_isar5_el1=0
+id_isar6_el1=0
+mvfr0_el1=0
+mvfr1_el1=0
+mvfr2_el1={{ cpu.v["misc:mvfr2_el1"] }}
+id_aa64pfr0_el1={{ cpu.v["misc:id_aa64pfr0_el1"] }}
+id_aa64pfr1_el1={{ cpu.v["misc:id_aa64pfr1_el1"] }}
+id_aa64dfr0_el1={{ cpu.v["misc:id_aa64dfr0_el1"] }}
+id_aa64dfr1_el1={{ cpu.v["misc:id_aa64dfr1_el1"] }}
+id_aa64afr0_el1={{ cpu.v["misc:id_aa64afr0_el1"] }}
+id_aa64afr1_el1={{ cpu.v["misc:id_aa64afr1_el1"] }}
+id_aa64isar0_el1={{ cpu.v["misc:id_aa64isar0_el1"] }}
+id_aa64isar1_el1={{ cpu.v["misc:id_aa64isar1_el1"] }}
+id_aa64isar2_el1=1
+id_aa64mmfr0_el1={{ cpu.v["misc:id_aa64mmfr0_el1"] }}
+id_aa64mmfr1_el1={{ cpu.v["misc:id_aa64mmfr1_el1"] }}
+ccsidr_el1=0
+clidr_el1={{ cpu.v["misc:clidr_el1"] }}
+aidr_el1={{ cpu.v["misc:aidr_el1"] }}
+csselr_el1=0
+ctr_el0=0
+dczid_el0={{ cpu.v["misc:dczid_el0"] }}
+vpidr_el2=0
+vmpidr_el2=0
+sctlr_el1=0
+sctlr_el12=0
+sctlr2_el1=0
+sctlr2_el12=0
+actlr_el1=0
+cpacr_el1=0
+cpacr_el12=0
+sctlr_el2=0
+sctlr2_el2=0
+actlr_el2=0
+hcr_el2=0
+hcrx_el2=0
+mdcr_el2=0
+cptr_el2=0
+hstr_el2=0
+hacr_el2=0
+sctlr_el3=818219056
+sctlr2_el3=0
+actlr_el3=0
+scr_el3=0
+sder32_el3=0
+cptr_el3=0
+mdcr_el3=0
+ttbr0_el1=0
+ttbr0_el12=0
+ttbr1_el1=0
+ttbr1_el12=0
+tcr_el1=0
+tcr_el12=0
+tcr2_el1=0
+tcr2_el12=0
+ttbr0_el2=0
+tcr_el2=0
+tcr2_el2=0
+vttbr_el2=0
+vtcr_el2=0
+vsttbr_el2=0
+vstcr_el2=0
+ttbr0_el3=0
+tcr_el3=0
+dacr32_el2=0
+spsr_el1=0
+spsr_el12=0
+elr_el1={{ cpu.v["misc:elr_el1"] }}
+elr_el12=0
+sp_el0=0
+spsel=0
+currentel=0
+nzcv=0
+daif=0
+fpcr={{ cpu.v["misc:fpcr"] }}
+fpsr={{ cpu.v["misc:fpsr"] }}
+dspsr_el0=0
+dlr_el0=0
+spsr_el2=0
+elr_el2=0
+sp_el1=0
+spsr_irq_aa64=0
+spsr_abt_aa64=0
+spsr_und_aa64=0
+spsr_fiq_aa64=0
+spsr_el3=0
+elr_el3=0
+sp_el2=0
+afsr0_el1=0
+afsr0_el12=0
+afsr1_el1=0
+afsr1_el12=0
+esr_el1={{ cpu.v["misc:esr_el1"] }}
+esr_el12=0
+ifsr32_el2=0
+afsr0_el2=0
+afsr1_el2=0
+esr_el2=0
+fpexc32_el2=0
+afsr0_el3=0
+afsr1_el3=0
+esr_el3=0
+far_el1=0
+far_el12=0
+far_el2=0
+hpfar_el2=0
+far_el3=0
+ic_ialluis=0
+par_el1=0
+ic_iallu=0
+dc_ivac_xt=0
+dc_isw_xt=0
+at_s1e1r_xt=0
+at_s1e1w_xt=0
+at_s1e0r_xt=0
+at_s1e0w_xt=0
+dc_csw_xt=0
+dc_cisw_xt=0
+dc_zva_xt=0
+ic_ivau_xt=0
+dc_cvac_xt=0
+dc_cvau_xt=0
+dc_civac_xt=0
+at_s1e2r_xt=0
+at_s1e2w_xt=0
+at_s12e1r_xt=0
+at_s12e1w_xt=0
+at_s12e0r_xt=0
+at_s12e0w_xt=0
+at_s1e3r_xt=0
+at_s1e3w_xt=0
+tlbi_vmalle1is=0
+tlbi_vmalle1isnxs=0
+tlbi_vmalle1os=0
+tlbi_vmalle1osnxs=0
+tlbi_vae1is=0
+tlbi_vae1isnxs=0
+tlbi_vae1os=0
+tlbi_vae1osnxs=0
+lbi_aside1is_xt=0
+lbi_aside1is_xtnxs=0
+tlbi_aside1os=0
+tlbi_aside1osnxs=0
+tlbi_vaae1is=0
+tlbi_vaae1isnxs=0
+tlbi_vaae1os=0
+tlbi_vaae1osnxs=0
+tlbi_vale1is=0
+tlbi_vale1isnxs=0
+tlbi_vale1os=0
+tlbi_vale1osnxs=0
+tlbi_vaale1is=0
+tlbi_vaale1isnxs=0
+tlbi_vaale1os=0
+tlbi_vaale1osnxs=0
+tlbi_vmalle1=0
+tlbi_vmalle1nxs=0
+tlbi_vae1=0
+tlbi_vae1nxs=0
+tlbi_aside1=0
+tlbi_aside1nxs=0
+tlbi_vaae1=0
+tlbi_vaae1nxs=0
+tlbi_vale1=0
+tlbi_vale1nxs=0
+tlbi_vaale1=0
+tlbi_vaale1nxs=0
+tlbi_ipas2e1is=0
+tlbi_ipas2e1isnxs=0
+tlbi_ipas2e1os=0
+tlbi_ipas2e1osnxs=0
+tlbi_ipas2le1is=0
+tlbi_ipas2le1isnxs=0
+tlbi_ipas2le1os=0
+tlbi_ipas2le1osnxs=0
+tlbi_alle2is=0
+tlbi_alle2isnxs=0
+tlbi_alle2os=0
+tlbi_alle2osnxs=0
+tlbi_vae2is=0
+tlbi_vae2isnxs=0
+tlbi_vae2os=0
+tlbi_vae2osnxs=0
+tlbi_alle1is=0
+tlbi_alle1isnxs=0
+tlbi_alle1os=0
+tlbi_alle1osnxs=0
+tlbi_vale2is=0
+tlbi_vale2isnxs=0
+tlbi_vale2os=0
+tlbi_vale2osnxs=0
+tlbi_vmalls12e1is=0
+tlbi_vmalls12e1isnxs=0
+tlbi_vmalls12e1os=0
+tlbi_vmalls12e1osnxs=0
+tlbi_ipas2e1=0
+tlbi_ipas2e1nxs=0
+tlbi_ipas2le1=0
+tlbi_ipas2le1nxs=0
+tlbi_alle2=0
+tlbi_alle2nxs=0
+tlbi_vae2=0
+tlbi_vae2nxs=0
+tlbi_alle1=0
+tlbi_alle1nxs=0
+tlbi_vale2=0
+tlbi_vale2nxs=0
+tlbi_vmalls12e1=0
+tlbi_vmalls12e1nxs=0
+tlbi_alle3is=0
+tlbi_alle3isnxs=0
+tlbi_alle3os=0
+tlbi_alle3osnxs=0
+tlbi_vae3is=0
+tlbi_vae3isnxs=0
+tlbi_vae3os=0
+tlbi_vae3osnxs=0
+tlbi_vale3is=0
+tlbi_vale3isnxs=0
+tlbi_vale3os=0
+tlbi_vale3osnxs=0
+tlbi_alle3=0
+tlbi_alle3nxs=0
+tlbi_vae3=0
+tlbi_vae3nxs=0
+tlbi_vale3=0
+tlbi_vale3nxs=0
+tlbi_rvae1=0
+tlbi_rvae1nxs=0
+tlbi_rvaae1=0
+tlbi_rvaae1nxs=0
+tlbi_rvale1=0
+tlbi_rvale1nxs=0
+tlbi_rvaale1=0
+tlbi_rvaale1nxs=0
+tlbi_ripas2e1=0
+tlbi_ripas2e1nxs=0
+tlbi_ripas2le1=0
+tlbi_ripas2le1nxs=0
+tlbi_rvae2=0
+tlbi_rvae2nxs=0
+tlbi_rvale2=0
+tlbi_rvale2nxs=0
+tlbi_rvae3=0
+tlbi_rvae3nxs=0
+tlbi_rvale3=0
+tlbi_rvale3nxs=0
+tlbi_rvae1is=0
+tlbi_rvae1isnxs=0
+tlbi_rvaae1is=0
+tlbi_rvaae1isnxs=0
+tlbi_rvale1is=0
+tlbi_rvale1isnxs=0
+tlbi_rvaale1is=0
+tlbi_rvaale1isnxs=0
+tlbi_ripas2e1is=0
+tlbi_ripas2e1isnxs=0
+tlbi_ripas2le1is=0
+tlbi_ripas2le1isnxs=0
+tlbi_rvae2is=0
+tlbi_rvae2isnxs=0
+tlbi_rvale2is=0
+tlbi_rvale2isnxs=0
+tlbi_rvae3is=0
+tlbi_rvae3isnxs=0
+tlbi_rvale3is=0
+tlbi_rvale3isnxs=0
+tlbi_rvae1os=0
+tlbi_rvae1osnxs=0
+tlbi_rvaae1os=0
+tlbi_rvaae1osnxs=0
+tlbi_rvale1os=0
+tlbi_rvale1osnxs=0
+tlbi_rvaale1os=0
+tlbi_rvaale1osnxs=0
+tlbi_ripas2e1os=0
+tlbi_ripas2e1osnxs=0
+tlbi_ripas2le1os=0
+tlbi_ripas2le1osnxs=0
+tlbi_rvae2os=0
+tlbi_rvae2osnxs=0
+tlbi_rvale2os=0
+tlbi_rvale2osnxs=0
+tlbi_rvae3os=0
+tlbi_rvae3osnxs=0
+tlbi_rvale3os=0
+tlbi_rvale3osnxs=0
+pmintenset_el1=0
+pmintenclr_el1=0
+pmcr_el0=0
+pmcntenset_el0=0
+pmcntenclr_el0=0
+pmovsclr_el0={{ cpu.v["misc:pmovsclr_el0"] }}
+pmswinc_el0=0
+pmselr_el0=0
+pmceid0_el0=0
+pmceid1_el0=0
+pmccntr_el0=0
+pmxevtyper_el0=0
+pmccfiltr_el0={{ cpu.v["misc:pmccfiltr_el0"] }}
+pmxevcntr_el0=0
+pmuserenr_el0=0
+pmovsset_el0=0
+mair_el1=0
+mair_el12=0
+amair_el1=0
+amair_el12=0
+mair_el2=0
+amair_el2=0
+mair_el3=0
+amair_el3=0
+l2ctlr_el1={{ cpu.v["misc:l2ctlr_el1"] }}
+l2ectlr_el1={{ cpu.v["misc:l2ectlr_el1"] }}
+vbar_el1=0
+vbar_el12=0
+rvbar_el1={{ cpu.v["misc:rvbar_el1"] }}
+isr_el1=0
+vbar_el2=0
+rvbar_el2=0
+vbar_el3=0
+rvbar_el3=0
+rmr_el3=0
+contextidr_el1=0
+contextidr_el12=0
+tpidr_el1=0
+tpidr_el0=0
+tpidrro_el0=0
+tpidr_el2=0
+tpidr_el3=0
+cntfrq_el0=0
+cntpct_el0=0
+cntvct_el0=0
+cntp_ctl_el0=0
+cntp_cval_el0=0
+cntp_tval_el0=0
+cntv_ctl_el0=0
+cntv_cval_el0=0
+cntv_tval_el0=0
+cntp_ctl_el02=0
+cntp_cval_el02=0
+cntp_tval_el02=0
+cntv_ctl_el02=0
+cntv_cval_el02=0
+cntv_tval_el02=0
+cntkctl_el1=0
+cntkctl_el12=0
+cntps_ctl_el1=0
+cntps_cval_el1=0
+cntps_tval_el1=0
+cnthctl_el2=0
+cnthp_ctl_el2=0
+cnthp_cval_el2=0
+cnthp_tval_el2=0
+cnthps_ctl_el2=0
+cnthps_cval_el2=0
+cnthps_tval_el2=0
+cnthv_ctl_el2=0
+cnthv_cval_el2=0
+cnthv_tval_el2=0
+cnthvs_ctl_el2=0
+cnthvs_cval_el2=0
+cnthvs_tval_el2=0
+cntvoff_el2=0
+pmevcntr0_el0=0
+pmevcntr1_el0=0
+pmevcntr2_el0=0
+pmevcntr3_el0=0
+pmevcntr4_el0=0
+pmevcntr5_el0=0
+pmevtyper0_el0=0
+pmevtyper1_el0=0
+pmevtyper2_el0=0
+pmevtyper3_el0=0
+pmevtyper4_el0=0
+pmevtyper5_el0=0
+il1data0_el1=0
+il1data1_el1=0
+il1data2_el1=0
+il1data3_el1=0
+dl1data0_el1=0
+dl1data1_el1=0
+dl1data2_el1=0
+dl1data3_el1=0
+dl1data4_el1=0
+l2actlr_el1={{ cpu.v["misc:l2actlr_el1"] }}
+cpuactlr_el1={{ cpu.v["misc:cpuactlr_el1"] }}
+cpuectlr_el1={{ cpu.v["misc:cpuectlr_el1"] }}
+cpumerrsr_el1={{ cpu.v["misc:cpumerrsr_el1"] }}
+l2merrsr_el1={{ cpu.v["misc:l2merrsr_el1"] }}
+cbar_el1={{ cpu.v["misc:cbar_el1"] }}
+contextidr_el2=0
+ttbr1_el2=0
+id_aa64mmfr2_el1={{ cpu.v["misc:id_aa64mmfr2_el1"] }}
+id_aa64mmfr3_el1=273
+apdakeyhi_el1=0
+apdakeylo_el1=0
+apdbkeyhi_el1=0
+apdbkeylo_el1=0
+apgakeyhi_el1=0
+apgakeylo_el1=0
+apiakeyhi_el1=0
+apiakeylo_el1=0
+apibkeyhi_el1=0
+apibkeylo_el1=0
+icc_pmr_el1=0
+icc_iar0_el1=0
+icc_eoir0_el1=0
+icc_hppir0_el1=0
+icc_bpr0_el1=0
+icc_ap0r0_el1=0
+icc_ap0r1_el1=0
+icc_ap0r2_el1=0
+icc_ap0r3_el1=0
+icc_ap1r0_el1=0
+icc_ap1r0_el1_ns=0
+icc_ap1r0_el1_s=0
+icc_ap1r1_el1=0
+icc_ap1r1_el1_ns=0
+icc_ap1r1_el1_s=0
+icc_ap1r2_el1=0
+icc_ap1r2_el1_ns=0
+icc_ap1r2_el1_s=0
+icc_ap1r3_el1=0
+icc_ap1r3_el1_ns=0
+icc_ap1r3_el1_s=0
+icc_dir_el1=0
+icc_rpr_el1=0
+icc_sgi1r_el1=0
+icc_asgi1r_el1=0
+icc_sgi0r_el1=0
+icc_iar1_el1=0
+icc_eoir1_el1=0
+icc_hppir1_el1=0
+icc_bpr1_el1=0
+icc_bpr1_el1_ns=0
+icc_bpr1_el1_s=0
+icc_ctlr_el1=0
+icc_ctlr_el1_ns=0
+icc_ctlr_el1_s=0
+icc_sre_el1=0
+icc_sre_el1_ns=0
+icc_sre_el1_s=0
+icc_igrpen0_el1=0
+icc_igrpen1_el1=0
+icc_igrpen1_el1_ns=0
+icc_igrpen1_el1_s=0
+icc_sre_el2=0
+icc_ctlr_el3=0
+icc_sre_el3=0
+icc_igrpen1_el3=0
+ich_ap0r0_el2=0
+ich_ap0r1_el2=0
+ich_ap0r2_el2=0
+ich_ap0r3_el2=0
+ich_ap1r0_el2=0
+ich_ap1r1_el2=0
+ich_ap1r2_el2=0
+ich_ap1r3_el2=0
+ich_hcr_el2=0
+ich_vtr_el2=0
+ich_misr_el2=0
+ich_eisr_el2=0
+ich_elrsr_el2=0
+ich_vmcr_el2=0
+ich_lr0_el2=0
+ich_lr1_el2=0
+ich_lr2_el2=0
+ich_lr3_el2=0
+ich_lr4_el2=0
+ich_lr5_el2=0
+ich_lr6_el2=0
+ich_lr7_el2=0
+ich_lr8_el2=0
+ich_lr9_el2=0
+ich_lr10_el2=0
+ich_lr11_el2=0
+ich_lr12_el2=0
+ich_lr13_el2=0
+ich_lr14_el2=0
+ich_lr15_el2=0
+icv_pmr_el1=0
+icv_iar0_el1=0
+icv_eoir0_el1=0
+icv_hppir0_el1=0
+icv_bpr0_el1=0
+icv_ap0r0_el1=0
+icv_ap0r1_el1=0
+icv_ap0r2_el1=0
+icv_ap0r3_el1=0
+icv_ap1r0_el1=0
+icv_ap1r0_el1_ns=0
+icv_ap1r0_el1_s=0
+icv_ap1r1_el1=0
+icv_ap1r1_el1_ns=0
+icv_ap1r1_el1_s=0
+icv_ap1r2_el1=0
+icv_ap1r2_el1_ns=0
+icv_ap1r2_el1_s=0
+icv_ap1r3_el1=0
+icv_ap1r3_el1_ns=0
+icv_ap1r3_el1_s=0
+icv_dir_el1=0
+icv_rpr_el1=0
+icv_sgi1r_el1=0
+icv_asgi1r_el1=0
+icv_sgi0r_el1=0
+icv_iar1_el1=0
+icv_eoir1_el1=0
+icv_hppir1_el1=0
+icv_bpr1_el1=0
+icv_bpr1_el1_ns=0
+icv_bpr1_el1_s=0
+icv_ctlr_el1=0
+icv_ctlr_el1_ns=0
+icv_ctlr_el1_s=0
+icv_sre_el1=0
+icv_sre_el1_ns=0
+icv_sre_el1_s=0
+icv_igrpen0_el1=0
+icv_igrpen1_el1=0
+icv_igrpen1_el1_ns=0
+icv_igrpen1_el1_s=0
+icc_ap0r0={{ cpu.v["misc:icc_ap0r0"] }}
+icc_ap0r1={{ cpu.v["misc:icc_ap0r1"] }}
+icc_ap0r2={{ cpu.v["misc:icc_ap0r2"] }}
+icc_ap0r3={{ cpu.v["misc:icc_ap0r3"] }}
+icc_ap1r0={{ cpu.v["misc:icc_ap1r0"] }}
+icc_ap1r0_ns=0
+icc_ap1r0_s=0
+icc_ap1r1={{ cpu.v["misc:icc_ap1r1"] }}
+icc_ap1r1_ns=0
+icc_ap1r1_s=0
+icc_ap1r2={{ cpu.v["misc:icc_ap1r2"] }}
+icc_ap1r2_ns=0
+icc_ap1r2_s=0
+icc_ap1r3={{ cpu.v["misc:icc_ap1r3"] }}
+icc_ap1r3_ns=0
+icc_ap1r3_s=0
+icc_asgi1r=0
+icc_bpr0={{ cpu.v["misc:icc_bpr0"] }}
+icc_bpr1={{ cpu.v["misc:icc_bpr1"] }}
+icc_bpr1_ns=0
+icc_bpr1_s=0
+icc_ctlr={{ cpu.v["misc:icc_ctlr"] }}
+icc_ctlr_ns=0
+icc_ctlr_s=0
+icc_dir=0
+icc_eoir0=0
+icc_eoir1=0
+icc_hppir0=0
+icc_hppir1=0
+icc_hsre=0
+icc_iar0=0
+icc_iar1=0
+icc_igrpen0={{ cpu.v["misc:icc_igrpen0"] }}
+icc_igrpen1={{ cpu.v["misc:icc_igrpen1"] }}
+icc_igrpen1_ns=0
+icc_igrpen1_s=0
+icc_mctlr=0
+icc_mgrpen1=0
+icc_msre=0
+icc_pmr={{ cpu.v["misc:icc_pmr"] }}
+icc_rpr=0
+icc_sgi0r=0
+icc_sgi1r=0
+icc_sre={{ cpu.v["misc:icc_sre"] }}
+icc_sre_ns=0
+icc_sre_s=0
+ich_ap0r0=0
+ich_ap0r1=0
+ich_ap0r2=0
+ich_ap0r3=0
+ich_ap1r0=0
+ich_ap1r1=0
+ich_ap1r2=0
+ich_ap1r3=0
+ich_hcr=0
+ich_vtr=0
+ich_misr=0
+ich_eisr=0
+ich_elrsr=0
+ich_vmcr=0
+ich_lr0=0
+ich_lr1=0
+ich_lr2=0
+ich_lr3=0
+ich_lr4=0
+ich_lr5=0
+ich_lr6=0
+ich_lr7=0
+ich_lr8=0
+ich_lr9=0
+ich_lr10=0
+ich_lr11=0
+ich_lr12=0
+ich_lr13=0
+ich_lr14=0
+ich_lr15=0
+ich_lrc0=0
+ich_lrc1=0
+ich_lrc2=0
+ich_lrc3=0
+ich_lrc4=0
+ich_lrc5=0
+ich_lrc6=0
+ich_lrc7=0
+ich_lrc8=0
+ich_lrc9=0
+ich_lrc10=0
+ich_lrc11=0
+ich_lrc12=0
+ich_lrc13=0
+ich_lrc14=0
+ich_lrc15=0
+id_aa64zfr0_el1={{ cpu.v["misc:id_aa64zfr0_el1"] }}
+zcr_el3=15
+zcr_el2=15
+zcr_el12=0
+zcr_el1={{ cpu.v["misc:zcr_el1"] }}
+id_aa64smfr0_el1={{ cpu.v["misc:id_aa64smfr0_el1"] }}
+svcr={{ cpu.v["misc:svcr"] }}
+smidr_el1={{ cpu.v["misc:smidr_el1"] }}
+smpri_el1={{ cpu.v["misc:smpri_el1"] }}
+smprimap_el2=0
+smcr_el3=2147483663
+smcr_el2=2147483663
+smcr_el12=0
+smcr_el1={{ cpu.v["misc:smcr_el1"] }}
+tpidr2_el0={{ cpu.v["misc:tpidr2_el0"] }}
+mpamsm_el1=0
+rndr=0
+rndrrs=0
+hfgitr_el2=0
+hfgrtr_el2=0
+hfgwtr_el2=0
+hdfgrtr_el2=0
+hdfgwtr_el2=0
+hafgrtr_el2=0
+mpamidr_el1=3746995439730032896
+mpam0_el1=0
+mpam1_el1=0
+mpam2_el2=0
+mpam3_el3=0
+mpam1_el12=0
+mpamhcr_el2=0
+mpamvpmv_el2=0
+mpamvpm0_el2=0
+mpamvpm1_el2=0
+mpamvpm2_el2=0
+mpamvpm3_el2=0
+mpamvpm4_el2=0
+mpamvpm5_el2=0
+mpamvpm6_el2=0
+mpamvpm7_el2=0
+pire0_el1=0
+pire0_el2=0
+pire0_el12=0
+pir_el1=0
+pir_el2=0
+pir_el3=0
+pir_el12=0
+
+[system.cpu_cluster.cpus{{ cpu_tag(cpu) }}.isa.release_se]
+{% endfor %}
+
+[system.cpu_cluster]
+
+[system.cpu_cluster.clk_domain]
+_perfLevel=0
+
+[system.cpu_cluster.voltage_domain]
+_perfLevel=0
+
+[system]
+{% for cpu in cpus %}
+quiesceEndTick_{{ cpu.index }}=0
+{% endfor %}
+
+[system.physmem]
+lal_addr=
+lal_cid=
+nbr_of_stores=2
+
+[system.physmem.store0]
+store_id=0
+filename=system.physmem.store0.pmem
+range_size=134217728
+
+[system.physmem.store1]
+store_id=1
+filename=system.physmem.store1.pmem
+range_size={{ v["system.physmem.store1:range_size"] }}
+
+[system.workload]
+symtab.size=0
+
+[system.release]
+
+[system.realview.bootmem]
+currState=0
+prvEvalTick=0
+
+[system.realview.bootmem.power_state]
+currState=0
+prvEvalTick=0
+
+[system.mem_ctrls.dram]
+currState=0
+prvEvalTick=0
+
+[system.mem_ctrls.dram.power_state]
+currState=0
+prvEvalTick=0
+
+[system.clk_domain]
+_perfLevel=0
+
+[system.voltage_domain]
+_perfLevel=0
+
+[root]
+FullSystem=true
+
+[root.globals]
+curTick=1000
+version_tags=arm-ccregs arm-contextidr-el2 arm-gem5-gic-ext arm-gicv2-banked-regs arm-hdlcd-upgrade arm-miscreg-teehbr arm-sme2 arm-sve arm-sysreg-mapping-ns armv8 cpu-pid dvfs-perflevel etherswitch globals-to-root ide-dma-abort isa-is-simobject memory-per-range mempool-sections mempool-to-seworkload multiple-event-queues pci-config-pxcap process-fdmap-rename register-files remove-arm-cpsr-mode-miscreg riscv-dyn-vlen riscv-hext riscv-jvt riscv-pcstate riscv-senvcfg riscv-smrnmi riscv-vconf riscv-vext ruby-block-size-bytes smt-interrupts x86-add-tlb x86-add-xcr0
