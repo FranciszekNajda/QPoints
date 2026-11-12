@@ -1,493 +1,402 @@
 #!/usr/bin/env python3
-"""Convert a QEMU register-info.json into the CPU state of a gem5 m5.cpt.
+"""Convert the CPU state of a QEMU snapshot into a gem5 checkpoint (m5.cpt).
+
+The files of the conversion
+---------------------------
+  m5.cpt.j2          the gem5 checkpoint of the QFlex machine as a Jinja
+                     template: everything gem5 writes, with its reset values,
+                     and a {{ variable }} for every value that comes from the
+                     snapshot, with gem5's reset value as default
+                     (made by make_template.py from reference checkpoints)
+  conversion_dict.py one entry per variable: where its value comes from and
+                     which transform converts it; the gem5 register layout
+                     and the machine constants
+  transforms.py      the conversion functions
+This script reads the snapshot, computes every variable with these files and
+renders the template. It knows nothing about registers itself: what to
+convert is in conversion_dict.py, how to convert it in transforms.py.
 
 Inputs
-  register-info.json  produced by parallel-qemu at snapshot time
-  skeleton m5.cpt     produced by gem5 itself (qflex_generate_checkpoint.py) with
-                      the same configuration as the simulation; it provides every
-                      non-CPU object, the array sizes and the misc register list
-  gem5 sources        the gem5 source tree (e.g. QPoints/gem5); the register
-                      layout is extracted from it by gen_gem5_layout.py at each
-                      run, so it always matches the gem5 version in use.
-                      A gem5_layout.json file is also accepted (for inspection
-                      or tests).
+------
+  register-info.json   the QEMU register dump of the snapshot (written by
+                       parallel-qemu in <snapshot>.gem/)
+  --yaml               the device tree of the QEMU machine (dtc -O yaml). It
+                       gives the CPU count and the RAM size. Use the same YAML
+                       as for the gem5 restore (run_gem5.sh --yaml): gem5
+                       builds the machine from it, so the checkpoint and the
+                       machine then agree.
+  --template           m5.cpt.j2 (default: QPoints/conversion_templates/)
+  --dict               conversion_dict.py (default: next to this script)
 
 Output
-  a new m5.cpt: the skeleton with the CPU state of every core replaced, and a
-  coverage report on stderr.
+------
+  -o m5.cpt            the gem5 checkpoint. Put it in the snapshot's .gem
+                       directory, next to the memory files (*.pmem), which
+                       are not made here.
+  a report on stdout: how many variables were converted, which ones kept
+  their default, and the non-zero QEMU registers that were not used.
 
-Principle: a register value comes either from the snapshot or from gem5's own
-reset state (the skeleton), never from a value written in this repository.
+Steps
+-----
+  1. Read the dump, the machine (YAML), the dictionary and the template
+     (with the gem5 reset value of every variable).
+  2. Check: same CPU count in the dump and the YAML; the template has every
+     variable of the dictionary; the snapshot is in a state the conversion
+     supports (AArch64, no EL2/EL3 state, SME ZA off, consistent SVE length,
+     counter frequency of the gem5 machine). Any problem stops the script: a
+     wrong checkpoint would make gem5 simulate a different guest without any
+     error.
+  3. For every variable and every CPU: read the source value, apply the
+     transform. If the source has no value: the entry's default if it has
+     one, otherwise nothing is given and the template writes gem5's reset
+     value.
+  4. Render the template and write m5.cpt.
+Every value of the output comes either from the snapshot or from gem5's
+own reset state; the only values chosen by hand are the explicit defaults of
+conversion_dict.py.
 
-Usage
-  python3 convert.py register-info.json skeleton/m5.cpt <gem5 dir> out/m5.cpt
+Usage (from QPoints)
+--------------------
+  python3 scripts/convert.py <run>/init_warmed.gem/register-info.json \\
+      --yaml ../dtb/refs/virt_4cpu_8gb.yaml -o <run>/init_warmed.gem/m5.cpt
 """
 import argparse
+import importlib.util
 import json
 import os
 import re
 import sys
 import time
-from collections import OrderedDict
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from gen_gem5_layout import build_layout  # noqa: E402  (same directory)
+import jinja2
 
-# --------------------------------------------------------------------------
-# Small helpers
-# --------------------------------------------------------------------------
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+import transforms                                    # noqa: E402
+from transforms import ConversionError, Context      # noqa: E402
 
-def load_layout(gem5):
-    """gem5 source tree -> layout extracted now; .json file -> loaded as is."""
-    if os.path.isdir(gem5):
-        return build_layout(gem5)
-    with open(gem5) as f:
-        return json.load(f)
+# Variable scopes that have one value per CPU (the part of a variable name
+# before ":" and before the first "."; see conversion_dict.py). Same list as
+# in make_template.py.
+PER_CPU_SCOPES = {"cpu", "xc", "misc", "power", "redist", "cpuif", "timer"}
 
-
-def hexval(s):
-    return int(s, 16)
+# A variable in the template: {{ cpu.v.get("name", "default") }} or
+# {{ v.get("name", "default") }} (see make_template.py jinja_value)
+TEMPLATE_VARIABLE = re.compile(r'\bv\.get\("([^"]+)", "([^"]*)"\)')
 
 
-def le_bytes_from_hex(s, nbytes):
-    """QEMU prints registers MSB first ("0x<MSB..LSB>"); gem5 stores LSB first."""
-    raw = bytes.fromhex(s[2:])[::-1]
-    if len(raw) > nbytes and any(raw[nbytes:]):
-        raise ValueError(f"value {s[:18]}... does not fit in {nbytes} bytes")
-    return raw[:nbytes].ljust(nbytes, b"\0")
+def is_per_cpu(var):
+    """True if the variable has one value per CPU, e.g. "misc:sctlr_ns" or
+    "timer.virt_el1_timer:_offset"; False for "system.realview....:..."."""
+    return var.split(":", 1)[0].split(".")[0] in PER_CPU_SCOPES
 
 
-def fmt_bytes(b):
-    return " ".join(str(x) for x in b)
+def fail(msg):
+    """Stop without writing a checkpoint."""
+    sys.exit(f"convert.py: ERROR: {msg}")
 
 
-def parse_bytes(v):
-    return bytes(int(x) for x in v.split()) if v.strip() else b""
+def load_module(path, name):
+    """Import a Python file from its path (used for conversion_dict.py, so
+    another dictionary can be given with --dict)."""
+    spec = importlib.util.spec_from_file_location(name, path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
-# --------------------------------------------------------------------------
-# m5.cpt (INI-like) reader / writer that keeps the original order
-# --------------------------------------------------------------------------
+# ===========================================================================
+# Machine (from the device tree YAML)
+# ===========================================================================
 
-class Checkpoint:
-    """m5.cpt as written by gem5: optional '## ...' comment lines, then every
-    section preceded by an empty line ("\\n[name]\\n" followed by key=value lines).
-    """
+def read_machine_yaml(path):
+    """CPU count and RAM size from the YAML of `dtc -O yaml`.
 
-    def __init__(self, path):
-        self.header = []                       # comment lines before the first section
-        self.sections = OrderedDict()
-        current = None
-        with open(path) as f:
-            for line in f:
-                line = line.rstrip("\n")
-                m = re.match(r"^\[(.*)\]$", line)
-                if m:
-                    current = OrderedDict()
-                    self.sections[m.group(1)] = current
-                elif current is None:
-                    if line.startswith("#"):
-                        self.header.append(line)
-                elif "=" in line:
-                    k, v = line.split("=", 1)
-                    current[k] = v
-
-    def write(self, path):
-        """Write in exactly the same layout as gem5's own checkpoints."""
-        with open(path, "w") as f:
-            for line in self.header:
-                f.write(line + "\n")
-            for name, kv in self.sections.items():
-                f.write(f"\n[{name}]\n")
-                for k, v in kv.items():
-                    f.write(f"{k}={v}\n")
+    Read with regular expressions, so no YAML library is needed:
+      - every "cpu@<N>:" node is a CPU;
+      - the "memory@<addr>:" node has "reg: [[addr_hi, addr_lo, size_hi,
+        size_lo]]": QEMU virt uses 2 cells (2 x 32 bits) for addresses and
+        sizes, so size = size_hi << 32 | size_lo (e.g. [0x0, 0x40000000,
+        0x2, 0x0] is 8 GiB at 0x40000000)."""
+    text = open(path).read()
+    num_cpus = len(re.findall(r"^\s+cpu@[0-9a-f]+:\s*$", text, re.M))
+    m = re.search(r"^\s+memory@[0-9a-f]+:\s*\n((?:\s+.*\n)*?)\s+reg:\s*"
+                  r"\[\[([^\]]*)\]\]", text, re.M)
+    if not num_cpus or not m:
+        fail(f"{path}: no cpu@N or memory@ node found (not a dtc YAML?)")
+    cells = [int(c, 16) for c in m.group(2).replace(" ", "").split(",")]
+    if len(cells) != 4:
+        fail(f"{path}: memory reg should have 4 cells, found {cells}")
+    ram_bytes = (cells[2] << 32) | cells[3]
+    return num_cpus, ram_bytes
 
 
-# --------------------------------------------------------------------------
-# QEMU name -> gem5 misc register name
-# --------------------------------------------------------------------------
+# ===========================================================================
+# Checks on the snapshot
+# ===========================================================================
 
-# QEMU names whose gem5 equivalent cannot be derived by the generic rule.
-QEMU_SPECIAL = {
-    "AMAIR0": "amair_el1",   # QEMU uses the AArch32 name for AMAIR_EL1
-}
-
-# Registers that are NOT copied into miscRegs, with the reason.
-# (Values are still read from the JSON where they are used elsewhere.)
-NOT_MISC = {
-    "pc": "goes to the PC state (_pc/_npc)",
-    "sp": "current SP, goes to regs.integer",
-    "cpsr": "handled separately (flags -> regs.condition_code)",
-    "SP_EL0": "goes to regs.integer (sp0); gem5 reads SP_EL0 from there",
-    "SP_EL1": "goes to regs.integer (sp1); gem5 reads SP_EL1 from there",
-    "MPIDR_EL1": "computed by gem5 (readMPIDR); checked, not written",
-    "CNTVCT_EL0": "counter value lives in gem5's generic timer, not in miscRegs",
-    "CNTPCT_EL0": "counter value lives in gem5's generic timer, not in miscRegs",
-    "vg": "SVE vector length, gem5 configuration (sve_vl)",
-    "fpcr": "lowercase duplicate of FPCR",
-    "fpsr": "lowercase duplicate of FPSR",
-}
-
-ID_REG = re.compile(r"^(ID_|MIDR|REVIDR|CTR_EL0|CLIDR|CCSIDR|AIDR|DCZID|MVFR|"
-                    r"ERRIDR|LORID|SMIDR|PMCEID|PMMIR|MDRAR|RVBAR|CBAR)")
-
-
-def gem5_candidates(qname):
-    if qname in QEMU_SPECIAL:
-        return [QEMU_SPECIAL[qname]]
-    low = qname.lower()
-    if low.endswith("_reserved") or low.startswith("res_0_"):
-        return []
-    cands = [low]
-    if not re.search(r"_el\d+$", low):
-        # QEMU names ARM_CP_STATE_BOTH registers by their AArch32 name.
-        cands.insert(0, low + "_el1")
-    return cands
-
-
-# --------------------------------------------------------------------------
-# Coverage: why a gem5 misc slot was not written
-# --------------------------------------------------------------------------
-
-RESET_REASONS = [
-    (r"(_el2|_el3|_el12|_el02)$|^(h|v)(?!bar)|hyp|^scr|^nsacr|^sder|^mvbar|^mon|_s$",
-     "EL2/EL3/Secure state not implemented (QEMU virtualization=off, secure=off)"),
-    (r"^(tlbi|at_|ats|dc_|ic_|dccmvau|dccimvac|dcimvac|dccmvac|dccisw|dcisw|dccsw|"
-     r"icialluis|iciallu|icimvau|bpiall|bpiallis|bpimva|cp15|tlb|itlb|dtlb|cfp|cpp|dvp)",
-     "operation encoding, no state"),
-    (r"^(id_|midr|mpidr|revidr|ctr|clidr|ccsidr|csselr|aidr|dczid|mvfr|fpsid|jidr|"
-     r"tcmtr|tlbtr|erridr|lorid|smidr|gmid|mpamidr|pmceid|dbgdidr|dbgdevid|dbgauth|"
-     r"dbgdrar|dbgdsar|mdrar|rvbar|rmr|cbar)",
-     "identification register: gem5 describes its own CPU model"),
-    (r"^ap(ia|ib|da|db|ga)key", "pointer authentication disabled (pauth=off)"),
-    (r"^icv_|^ich_", "GIC virtual CPU interface (EL2 only)"),
-    (r"^(mpam|pir|por|tcr2|sctlr2|gcs|rcw|trf|trc|brb|pms|pmb|spe|amu|amcg|amcn|amev|"
-     r"amcr|amcntenclr|amcntenset|amuserenr|tfsr|gcr|rgsr|mec|pfar|hcrx|zcr_el3|smcr|"
-     r"smpri|svcr|tpidr2|zt0|erx|err|disr|vdisr|vsesr|scxtnum|lor|hdfg|hfg|hafgrtr)",
-     "architecture feature not used by this snapshot / not in QEMU's state"),
-    (r"^(dbg|osl|osd|mdcc|mddtr|dlr|dspsr|dbgw|dbgb|teecr|teehbr|joscr|jmcr|"
-     r"dl1data|il1data|l2ctlr|l2ectlr|l2merrsr|cpumerrsr|cpuactlr|cpuectlr|"
-     r"actlr|adfsr|aifsr|afsr|l2actlr|pmswinc|pmxev|pmintenclr|oslar|isr|nmrr_s|"
-     r"prrr_s|fcseidr|tcmtr|nop|ramindex)",
-     "debug / implementation-defined / derived register"),
-    (r"^(cnth|cntvoff)",
-     "EL2 timer / virtual offset (no EL2; CNTVOFF is 0)"),
-    (r"^(cntv_tval|cntp_tval|cntps_tval)",
-     "TVAL timer view, computed from CVAL and the counter"),
-    (r"^spsr_(irq|abt|und|fiq)_aa64$",
-     "AArch64 view of AArch32-mode SPSRs (only used when EL2+ is AArch64 "
-     "and handles AArch32 exceptions)"),
-    (r"^(spsr|spsr_mon)$",
-     "AArch32 current/Monitor SPSR (guest runs AArch64, no EL3)"),
-    (r"^(pmovsr|pmccfiltr)$",
-     "AArch32 PMU name (AArch64 state is in the *_el0 registers)"),
-    (r"^lbi_", "operation encoding, no state"),
-    (r"^icc_(iar|eoir|hppir|dir|rpr|sgi|asgi)",
-     "GIC acknowledge / end-of-interrupt / SGI / read-only register: no stored state"),
-    (r"^icc_(hsre|mctlr|mgrpen1|msre)$",
-     "GIC Monitor/Hyp register (no EL2/EL3)"),
-]
-
-
-# Slots that gem5 computes from other state instead of reading them (isa.cc).
-PSTATE_VIEWS = {
-    "nzcv": "view of regs.condition_code (isa.cc readMiscReg)",
-    "daif": "view of cpsr (isa.cc readMiscReg)",
-    "spsel": "view of cpsr (isa.cc readMiscReg)",
-    "currentel": "view of cpsr (isa.cc readMiscReg)",
-    "sp_el0": "view of regs.integer sp0 (isa.cc readMiscReg)",
-    "sp_el1": "view of regs.integer sp1 (isa.cc readMiscReg)",
-    "cpsr_mode": "view of cpsr", "cpsr_q": "view of cpsr",
-    "fpscr": "view of fpcr/fpsr (isa.cc readMiscReg)",
-    "fpscr_exc": "view of fpcr/fpsr", "fpscr_qc": "view of fpcr/fpsr",
-    "cntpct": "counter: lives in gem5's generic timer",
-    "cntvct": "counter: lives in gem5's generic timer",
-    "lockaddr": "gem5 internal (exclusive monitor)",
-    "lockflag": "gem5 internal (exclusive monitor)",
-    "sev_mailbox": "gem5 internal (WFE/SEV)",
-    "rndr": "random number, no state", "rndrrs": "random number, no state",
-}
-
-
-def reset_reason(name):
-    for pattern, reason in RESET_REASONS:
-        if re.search(pattern, name):
-            return reason
-    return None
-
-
-# --------------------------------------------------------------------------
-# Per-CPU conversion
-# --------------------------------------------------------------------------
-
-def find_cpus(cpt):
-    """Return {cpu_index: (xc_section_name, misc_section_name)}."""
-    cpus = {}
-    for name in cpt.sections:
-        m = re.match(r"^(.*\.cpus?(\d+))\.xc\.0$", name)
-        if m:
-            base, idx = m.group(1), int(m.group(2))
-            cpus[idx] = (name, f"{base}.isa.miscRegs")
-    return dict(sorted(cpus.items()))
-
-
-# --------------------------------------------------------------------------
-# Assumption checks (document A, section 9.6 and check V8)
-# --------------------------------------------------------------------------
-
-EL23_REG = re.compile(r"_EL(2|3)$")
-
-
-def check_assumptions(qcpus):
-    """Return a list of errors if the dump contradicts what the converter assumes.
-
-    These assumptions are load-bearing: they justify leaving some registers at
-    gem5's reset value and choosing the vector path.
-      - No EL2/EL3 state (QEMU virtualization=off, secure=off): every _EL2/_EL3
-        register must be zero, otherwise that state would be silently dropped.
-      - SME inactive: SVCR == 0 and TPIDR2_EL0 == 0 (ZA/ZT0 are not transferred).
-      - SVE: z registers present together with vg, and the current vector
-        length (vg) consistent with ZCR_EL1.LEN.
-      - FEAT_TCR2 / FEAT_S1PIE unused: TCR2_EL1 and PIR*_EL1 absent or zero.
-    """
+def check_snapshot(cpus, machine):
+    """Return the list of errors: states the conversion does not support,
+    or in which it would silently lose information. Each check matches an
+    assumption of conversion_dict.py / transforms.py."""
     errors = []
-    for cpu, r in sorted(qcpus.items()):
-        h = lambda n: int(r[n], 16) if n in r else 0
-
-        nonzero_el23 = sorted(n for n, v in r.items()
-                              if EL23_REG.search(n) and int(v, 16) != 0)
-        if nonzero_el23:
-            errors.append(f"cpu{cpu}: EL2/EL3 registers hold state {nonzero_el23}; "
-                          "the converter assumes virtualization=off, secure=off")
-
-        for n in ("SVCR", "TPIDR2_EL0"):
-            if h(n) != 0:
-                errors.append(f"cpu{cpu}: {n}={r[n]} (SME state is not transferred)")
-
-        if ("z0" in r) != ("vg" in r):
-            errors.append(f"cpu{cpu}: inconsistent SVE dump (z0 and vg must "
-                          "be present together)")
+    h = lambda r, n: int(r[n], 16) if n in r else 0
+    for i, r in enumerate(cpus):
+        # AArch64 only: cpsr bit 4 = 1 means the CPU runs AArch32 code, whose
+        # registers gem5 lays out differently.
+        if h(r, "cpsr") & 0x10:
+            errors.append(f"cpu{i}: AArch32 state (cpsr={r['cpsr']})")
+        # No EL2/EL3 state: QEMU runs with virtualization=off, secure=off, and
+        # the dictionary does not convert EL2/EL3 registers (gem5 keeps its
+        # reset values). A non-zero one would be lost.
+        el23 = sorted(n for n, v in r.items()
+                      if re.search(r"_EL[23]$", n) and int(v, 16) != 0)
+        if el23:
+            errors.append(f"cpu{i}: EL2/EL3 registers hold state {el23}")
+        # SME: the ZA array is not in the dump, so it must be off
+        # (SVCR.ZA = bit 1). With ZA off its content does not matter and
+        # gem5's reset (zeros) is exact.
+        if h(r, "SVCR") & 0x2:
+            errors.append(f"cpu{i}: SVCR.ZA = 1 but ZA is not in the dump")
+        # SVE: QEMU's current vector length (vg, in 64-bit granules) must
+        # match ZCR_EL1.LEN (vector length / 128 - 1), which is converted.
         if "vg" in r and "ZCR_EL1" in r:
-            # vg counts 64-bit granules; ZCR_EL1.LEN gives (VL / 128) - 1.
-            expected_vg = 2 * ((h("ZCR_EL1") & 0xF) + 1)
-            if h("vg") != expected_vg:
-                errors.append(f"cpu{cpu}: vg={h('vg')} but ZCR_EL1.LEN implies "
-                              f"vg={expected_vg}")
-
+            expected = 2 * ((h(r, "ZCR_EL1") & 0xF) + 1)
+            if h(r, "vg") != expected:
+                errors.append(f"cpu{i}: vg={h(r, 'vg')} but ZCR_EL1.LEN "
+                              f"gives {expected}")
+        # Features whose registers are not converted: they must be unused.
         for n in ("TCR2_EL1", "PIR_EL1", "PIRE0_EL1"):
-            if h(n) != 0:
-                errors.append(f"cpu{cpu}: {n}={r[n]} (feature not transferred)")
+            if h(r, n):
+                errors.append(f"cpu{i}: {n}={r[n]} (feature not converted)")
+        # Counter frequency: the gem5 machine counts at counter_freq (set in
+        # qflex_system.py); if QEMU counted at another one, the guest's
+        # time and timer deadlines would be wrong.
+        if "CNTFRQ_EL0" in r and h(r, "CNTFRQ_EL0") != machine["counter_freq"]:
+            errors.append(f"cpu{i}: CNTFRQ_EL0={h(r, 'CNTFRQ_EL0')} but the "
+                          f"gem5 counter runs at {machine['counter_freq']} Hz")
     return errors
 
 
-def convert_cpu(regs, xc, misc, layout, report):
-    vec_info = layout["vec"]
-    cpsr = hexval(regs["cpsr"])
-    el = (cpsr >> 2) & 3
-    spsel = cpsr & 1
+def warnings_snapshot(cpus, conversion, defaults):
+    """Things worth knowing that do not stop the conversion."""
+    warns = []
+    h = lambda r, n: int(r[n], 16) if n in r else None
+    # gem5 does not restore MPIDR: it computes it from the CPU index
+    # (Aff0 = index, bit 31 = 1). QEMU virt with GICv3 does the same up to
+    # 16 CPUs; beyond, the guest would see other CPU numbers.
+    for i, r in enumerate(cpus):
+        mpidr = h(r, "MPIDR_EL1")
+        if mpidr is not None and mpidr != (0x80000000 | i):
+            warns.append(f"cpu{i}: MPIDR_EL1={mpidr:#x}, gem5 will use "
+                         f"{0x80000000 | i:#x}")
+    # The system counter is shared: CNTPCT of CPU 0 is used for all CPUs.
+    pcts = {h(r, "CNTPCT_EL0") for r in cpus}
+    if len(pcts) > 1:
+        warns.append(f"CNTPCT_EL0 differs between CPUs {sorted(pcts)}; CPU 0's "
+                     "value is used")
+    return warns
 
-    # ---- regs.integer -------------------------------------------------------
-    int_bytes = parse_bytes(xc["regs.integer"])
-    n_int = len(layout["int_regs"])
-    slot_bytes = len(int_bytes) // n_int
-    assert slot_bytes * n_int == len(int_bytes), "regs.integer size mismatch"
-    ints = [0] * n_int
-    for i in range(31):                                # x0..x30 (x31 = zero reg)
-        ints[layout["x_slot"][i]] = hexval(regs[f"x{i}"])
-    for lvl in range(4):
-        name = f"SP_EL{lvl}"
-        if name in regs:
-            ints[layout["sp_slot"][name]] = hexval(regs[name])
-    # The banked SP_ELx copies in QEMU are only synced on exception entry/exit,
-    # so the SP of the current mode must come from "sp".
-    current_sp = "SP_EL0" if (el == 0 or spsel == 0) else f"SP_EL{el}"
-    ints[layout["sp_slot"][current_sp]] = hexval(regs["sp"])
-    xc["regs.integer"] = fmt_bytes(b"".join(v.to_bytes(slot_bytes, "little")
-                                            for v in ints))
 
-    # ---- regs.vector / vector_element / vector_predicate --------------------
-    n_vec = vec_info["NumVecRegs"]
-    vec_total = len(parse_bytes(xc["regs.vector"]))
-    vreg_bytes = vec_total // n_vec
-    vectors = [bytes(vreg_bytes)] * n_vec
-    src = "z" if "z0" in regs else "v"
-    for i in range(vec_info["NumVecV8ArchRegs"]):
-        vectors[i] = le_bytes_from_hex(regs[f"{src}{i}"], vreg_bytes)
-    xc["regs.vector"] = fmt_bytes(b"".join(vectors))
+# ===========================================================================
+# Conversion of the variables
+# ===========================================================================
 
-    # Element view (VecElem = uint32, stored as one RegVal per element).
-    elem_total = len(parse_bytes(xc["regs.vector_element"]))
-    elems_per_reg = vreg_bytes // 4
-    elem_slot = elem_total // (n_vec * elems_per_reg)
-    elem_out = bytearray()
-    for v in vectors:
-        for e in range(elems_per_reg):
-            word = int.from_bytes(v[4 * e:4 * e + 4], "little")
-            elem_out += word.to_bytes(elem_slot, "little")
-    xc["regs.vector_element"] = fmt_bytes(elem_out)
+def read_source(entry, regs, machine, constants):
+    """The source value of one dictionary entry, or None if there is none.
 
-    n_pred = vec_info["NumVecPredRegs"]
-    pred_total = len(parse_bytes(xc["regs.vector_predicate"]))
-    pbits = pred_total // n_pred                 # one byte per predicate bit
-    preds = [bytes(pbits)] * n_pred
-    names = {i: f"p{i}" for i in range(16)}
-    names[vec_info["PREDREG_FFR"]] = "ffr"
-    for idx, qname in names.items():
-        if qname in regs:
-            val = hexval(regs[qname])
-            preds[idx] = bytes((val >> b) & 1 for b in range(pbits))
-    xc["regs.vector_predicate"] = fmt_bytes(b"".join(preds))
+      file None                   not converted yet -> None
+      file "machine.yaml"         machine[path], e.g. machine["ram_bytes"]
+      file "conversion_dict.py"   constants[path] (conversion_dict.MACHINE)
+      file "register-info.json"   path is a register name -> its value (None
+                                  if absent); path is a list -> {name: value}
+                                  of the names found ("{i}" in a name stands
+                                  for 0..63, e.g. "z{i}")"""
+    file, path = entry["file"], entry["path"]
+    if file is None:
+        return None
+    if file == "machine.yaml":
+        return machine[path]
+    if file == "conversion_dict.py":
+        return constants[path]
+    if file != "register-info.json":
+        fail(f"unknown source file {file}")
+    if isinstance(path, str):
+        return regs.get(path)
+    found = {}
+    for pattern in path:
+        names = ([pattern.format(i=i) for i in range(64)] if "{i}" in pattern
+                 else [pattern])
+        for n in names:
+            if n in regs:
+                found[n] = regs[n]
+    return found or None
 
-    # regs.matrix: SME ZA state, only valid if SME is active (SVCR.ZA).
-    if hexval(regs.get("SVCR", "0x0")) & 0x2:
-        report["errors"].append("SVCR.ZA=1 but ZA is not exported by QEMU")
 
-    # ---- regs.condition_code ------------------------------------------------
-    cc_vals = {"nz": (cpsr >> 30) & 3, "c": (cpsr >> 29) & 1, "v": (cpsr >> 28) & 1}
-    cc_names = layout["cc_regs"]
-    cc_total = len(parse_bytes(xc["regs.condition_code"]))
-    cc_slot = cc_total // len(cc_names)
-    xc["regs.condition_code"] = fmt_bytes(b"".join(
-        cc_vals.get(n, 0).to_bytes(cc_slot, "little") for n in cc_names))
+def source_names(entry):
+    """Names of every QEMU register an entry may read (for the report of
+    unused registers)."""
+    if entry["file"] != "register-info.json":
+        return set()
+    path = entry["path"]
+    path = [path] if isinstance(path, str) else path
+    out = set()
+    for p in path:
+        out |= {p.format(i=i) for i in range(64)} if "{i}" in p else {p}
+    return out
 
-    # ---- PC state ------------------------------------------------------------
-    pc = hexval(regs["pc"])
-    xc["_pc"] = str(pc)
-    xc["_npc"] = str(pc + 4)
-    # flags/_size/nextFlags come from the skeleton (AArch64: flags=4).
 
-    # ---- miscRegs --------------------------------------------------------------
-    alias = layout["misc_alias"]
-    written = {}
+def convert_variable(var, entry, regs, defaults, cdict, machine, stats):
+    """The value (m5.cpt text) of one variable, for one CPU or for the
+    machine, or None to let the template write gem5's reset value.
+    stats records which variables were converted and which kept a default,
+    for the report."""
+    src = read_source(entry, regs, machine, cdict.MACHINE)
+    if src is None:
+        # no value in the source: the entry's explicit default if it has
+        # one, otherwise gem5's reset value (written by the template)
+        stats.setdefault("default", set()).add(var)
+        return entry.get("default")
+    fn = transforms.TRANSFORMS.get(entry["transform"])
+    if fn is None:
+        fail(f"{var}: transform {entry['transform']} not in transforms.py")
+    ctx = Context(regs, defaults.get(var), cdict.GEM5_LAYOUT, machine, var)
+    try:
+        value = fn(src, ctx)
+    except ConversionError as e:
+        fail(f"{var}: {e}")
+    stats.setdefault("converted", set()).add(var)
+    return value
 
-    def put(name, value):
-        if name not in misc:
-            raise KeyError(name)
-        misc[name] = str(value)
-        written[name] = True
 
-    # CPSR without the NZCV flags (they live in regs.condition_code).
-    put("cpsr", cpsr & ~0xF0000000)
-
-    for qname, sval in regs.items():
-        if VECTOR_OR_GPR.fullmatch(qname) or qname in NOT_MISC:
+def convert_all(conversion, per_cpu, regs, defaults, cdict, machine, stats):
+    """{variable: value} for the per-CPU variables (per_cpu=True) or the
+    variables that exist once, leaving out the ones that keep gem5's reset
+    value (the template writes it)."""
+    values = {}
+    for var, e in conversion.items():
+        if is_per_cpu(var) != per_cpu:
             continue
-        if ID_REG.match(qname):
-            report["id_regs"].add(qname)
-            continue
-        cands = [c for c in gem5_candidates(qname) if c in alias or c in misc]
-        if not cands:
-            if hexval(sval) != 0:
-                report["lost"].add(f"{qname}={sval}")
-            else:
-                report["no_gem5_equiv"].add(qname)
-            continue
-        g = cands[0]
-        val = hexval(sval)
-        targets = alias.get(g, [g])
-        if len(targets) == 2:              # 64-bit value split in two 32-bit slots
-            put(targets[0], val & 0xFFFFFFFF)
-            put(targets[1], val >> 32)
-        else:
-            put(targets[0], val)
-        report["captured"].add(g)
-    return written
+        value = convert_variable(var, e, regs, defaults, cdict, machine, stats)
+        if value is not None:
+            values[var] = value
+    return values
 
 
-VECTOR_OR_GPR = re.compile(r"[xvqdshbzp]\d+|ffr")
-
+# ===========================================================================
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__,
-                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("register_info")
-    ap.add_argument("skeleton")
-    ap.add_argument("gem5", help="gem5 source tree, or a gem5_layout.json file")
-    ap.add_argument("output")
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("register_info", help="QEMU register-info.json")
+    ap.add_argument("--yaml", required=True, help="machine device tree (YAML)")
+    ap.add_argument("-o", "--output", required=True, help="m5.cpt to write")
+    ap.add_argument("--template",
+                    default=os.path.join(HERE, "..", "conversion_templates",
+                                         "m5.cpt.j2"))
+    ap.add_argument("--dict", default=os.path.join(HERE, "conversion_dict.py"))
     args = ap.parse_args()
 
-    qemu = json.load(open(args.register_info))
-    layout = load_layout(args.gem5)
-    cpt = Checkpoint(args.skeleton)
-    cpt.header.append(
-        f"## converted by convert.py on {time.ctime()} "
-        f"from {os.path.abspath(args.register_info)} "
-        f"(skeleton: {os.path.abspath(args.skeleton)})")
+    # ---- step 1: inputs ------------------------------------------------------
+    # The dump: {"cpus": [{"cpu_id": 0, "registers": {name: hex}}, ...]}.
+    # CPUs are sorted by cpu_id, which must be 0..N-1 (the CPU index gem5
+    # uses in its section names).
+    dump = json.load(open(args.register_info))
+    dump_cpus = sorted(dump["cpus"], key=lambda c: c["cpu_id"])
+    if [c["cpu_id"] for c in dump_cpus] != list(range(len(dump_cpus))):
+        fail("cpu_id values of the dump are not 0..N-1")
+    cpus = [c["registers"] for c in dump_cpus]
+    cdict = load_module(args.dict, "conversion_dict")
+    conversion = cdict.CONVERSION
+    template_text = open(args.template).read()
+    # gem5's reset value of every variable, as written in the template
+    defaults = dict(TEMPLATE_VARIABLE.findall(template_text))
+    num_cpus, ram_bytes = read_machine_yaml(args.yaml)
+    # machine values, used by the "machine.yaml" entries and some transforms
+    machine = {"num_cpus": num_cpus, "ram_bytes": ram_bytes, **cdict.MACHINE}
 
-    qcpus = {c["cpu_id"]: c["registers"] for c in qemu["cpus"]}
-    gcpus = find_cpus(cpt)
-    if sorted(qcpus) != sorted(gcpus):
-        sys.exit(f"CPU count mismatch: snapshot has {len(qcpus)} CPUs, "
-                 f"skeleton has {len(gcpus)}. Regenerate the skeleton.")
+    # ---- step 2: checks ------------------------------------------------------
+    if num_cpus != len(cpus):
+        fail(f"the dump has {len(cpus)} CPUs but {args.yaml} has {num_cpus}: "
+             "use the YAML of the machine the snapshot was taken on")
+    # every variable must be in the template: otherwise the dictionary was
+    # changed without running make_template.py again
+    missing = sorted(set(conversion) - set(defaults))
+    if missing:
+        fail("conversion_dict.py has variables that are not in the template "
+             f"(run make_template.py again): {missing}")
+    errors = check_snapshot(cpus, machine)
+    if errors:
+        fail("the snapshot is in a state the conversion does not support:\n  "
+             + "\n  ".join(errors))
+    for w in warnings_snapshot(cpus, conversion, defaults):
+        print(f"WARNING: {w}")
 
-    problems = check_assumptions(qcpus)
-    if problems:
-        print("ERROR: the snapshot contradicts the converter's assumptions:",
-              file=sys.stderr)
-        for p in problems:
-            print("  " + p, file=sys.stderr)
-        sys.exit(1)
-    print("Assumption checks passed: no EL2/EL3 state, SME inactive, "
-          "SVE length consistent, TCR2/PIR unused", file=sys.stderr)
+    # ---- step 3: values ------------------------------------------------------
+    stats = {}
+    # per-CPU variables: computed from the registers of each CPU
+    cpu_ctx = [{"index": i,
+                "v": convert_all(conversion, True, regs, defaults, cdict,
+                                 machine, stats)}
+               for i, regs in enumerate(cpus)]
+    # variables that exist once: QEMU values are taken from CPU 0 (e.g. the
+    # system counter, shared by all CPUs)
+    global_values = convert_all(conversion, False, cpus[0], defaults, cdict,
+                                machine, stats)
 
-    report = {"captured": set(), "id_regs": set(), "lost": set(),
-              "no_gem5_equiv": set(), "errors": []}
-    written_any = {}
-    for idx, (xc_name, misc_name) in gcpus.items():
-        written = convert_cpu(qcpus[idx], cpt.sections[xc_name],
-                              cpt.sections[misc_name], layout, report)
-        written_any.update(written)
+    # ---- step 4: render ------------------------------------------------------
+    # Same Jinja settings as make_template.py, whose re-render test proved
+    # that this template gives back gem5's own checkpoints:
+    #   trim_blocks/lstrip_blocks  lines with only {% %} leave no blank line
+    #   keep_trailing_newline      m5.cpt ends with a newline
+    #   StrictUndefined            a missing name is an error, not ""
+    env = jinja2.Environment(trim_blocks=True, lstrip_blocks=True,
+                             keep_trailing_newline=True,
+                             undefined=jinja2.StrictUndefined)
+    template = env.from_string(template_text)
+    # first line of m5.cpt, a comment (gem5 writes the date there)
+    header = (f"checkpoint converted by convert.py on {time.ctime()} from "
+              f"{os.path.abspath(args.register_info)}")
+    text = template.render(cpus=cpu_ctx, v=global_values, header=header)
+    os.makedirs(os.path.dirname(os.path.abspath(args.output)), exist_ok=True)
+    with open(args.output, "w") as f:
+        f.write(text)
 
-    out_dir = os.path.dirname(os.path.abspath(args.output))
-    os.makedirs(out_dir, exist_ok=True)
-    cpt.write(args.output)
-
-    # ---- coverage report ------------------------------------------------------
-    first_misc = cpt.sections[gcpus[min(gcpus)][1]]
-    alias = layout["misc_alias"]
-    reasons, unexplained = {}, []
-    for name in first_misc:
-        if name in written_any:
-            continue
-        if name in alias:
-            r = "alias: gem5 stores this register in another slot (.mapsTo)"
-        elif name + "_ns" in first_misc or name.endswith("_ns"):
-            r = "AArch32 banked copy (guest runs AArch64, no Secure state)"
-        elif name in PSTATE_VIEWS:
-            r = PSTATE_VIEWS[name]
-        else:
-            r = reset_reason(name)
-        if r:
-            reasons.setdefault(r, []).append(name)
-        else:
-            unexplained.append(name)
-
-    out = sys.stderr
-    print(f"== Converted {len(gcpus)} CPUs -> {args.output}", file=out)
-    print(f"regs.*: integer, vector, vector_element, vector_predicate, "
-          f"condition_code, PC state written for every CPU", file=out)
-    print(f"miscRegs: {len(written_any)} slots written from the snapshot "
-          f"(out of {len(first_misc)})", file=out)
-    print("Left at gem5 reset value:", file=out)
-    for r, names in sorted(reasons.items(), key=lambda kv: -len(kv[1])):
-        print(f"  {len(names):4d}  {r}", file=out)
-    print(f"  {len(unexplained):4d}  UNEXPLAINED", file=out)
-    for n in unexplained:
-        print(f"         {n}={first_misc[n]}", file=out)
-    print(f"QEMU ID registers not copied (gem5 keeps its own): "
-          f"{len(report['id_regs'])}", file=out)
-    print(f"QEMU registers without gem5 equivalent (all zero): "
-          f"{sorted(report['no_gem5_equiv'])}", file=out)
-    if report["lost"]:
-        print(f"WARNING non-zero QEMU registers lost: {sorted(report['lost'])}", file=out)
-    for e in report["errors"]:
-        print(f"ERROR {e}", file=out)
-    print("To check at restore: MPIDR per CPU "
-          + ", ".join(f"cpu{i}={qcpus[i].get('MPIDR_EL1')}" for i in sorted(qcpus))
-          + f"; counter CNTVCT={qcpus[min(qcpus)].get('CNTVCT_EL0')} "
-          f"CNTFRQ={qcpus[min(qcpus)].get('CNTFRQ_EL0')}", file=out)
-    return 1 if report["errors"] or report["lost"] else 0
+    # ---- report --------------------------------------------------------------
+    used = set().union(*(source_names(e) for e in conversion.values()))
+    # QEMU registers deliberately not used (see conversion_dict.py):
+    # MPIDR (computed by gem5), CNTVCT (= counter - CNTVOFF), vg (checked),
+    # lower-case fpcr/fpsr (duplicates of FPCR/FPSR), NEON views v/q/d/s/h/b
+    # (contained in z), EL2/EL3 registers (checked zero), and the ID /
+    # implementation registers that keep gem5's values (AArch32 ID_*, MVFR*,
+    # MIDR, REVIDR, AIDR, CLIDR, SMIDR, MDRAR, RVBAR, CBAR, PMCEID*)
+    ignored = re.compile(r"^(MPIDR_EL1|CNTVCT_EL0|vg|fpcr|fpsr|"
+                         r"[vqdshb]\d+|.*_EL[23]|"
+                         r"ID_\w+|MVFR\d_EL1|MIDR_EL1|REVIDR_EL1|AIDR|CLIDR|"
+                         r"SMIDR_EL1|MDRAR_EL1|RVBAR_EL1|CBAR_EL1|PMCEID\d_EL0)$")
+    unused = sorted(n for n, v in cpus[0].items()
+                    if n not in used and not ignored.match(n)
+                    and int(v, 16) != 0)
+    converted = stats.get("converted", set())
+    kept = stats.get("default", set())
+    print(f"converted {len(cpus)} CPUs, RAM {ram_bytes / 2**30:g} GiB "
+          f"-> {args.output}")
+    print(f"  {len(converted)} variables from the snapshot or the machine")
+    print(f"  {len(kept)} variables at their default:")
+    for var in sorted(kept):
+        d = conversion[var].get("default")
+        print(f"      {var}  ("
+              + (f"explicit default {d!r}" if d is not None
+                 else "gem5 reset value") + ")")
+    # non-zero QEMU registers that no entry reads: state that may be lost
+    # (to check by hand: a register without gem5 equivalent, or a missing
+    # entry in conversion_dict.py)
+    if unused:
+        print(f"  non-zero QEMU registers of CPU 0 not used ({len(unused)}):")
+        print("      " + " ".join(unused))
+    return 0
 
 
 if __name__ == "__main__":
     sys.exit(main())
+    
