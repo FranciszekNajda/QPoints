@@ -670,6 +670,18 @@ def main():
           f"identical, differences only in {sorted(MACHINE_VARIABLES)}; "
           f"GEM5_LAYOUT and MACHINE of conversion_dict.py match")
 
+    # A miscRegs variable whose key also exists with "_ns" is a banked
+    # register: gem5 reads the "_ns" copy (non-secure, the only state of the
+    # QFlex machine) and never the plain key, so a value written there would
+    # be silently lost.
+    misc = base.sections[section_name("cpu", base.cpus[0], ".isa.miscRegs",
+                                      base.num_cpus)]
+    banked = sorted(v for v in variables if v.startswith("misc:")
+                    and v[5:] + "_ns" in misc)
+    if banked:
+        fail("banked registers: gem5 reads the \"_ns\" key, use it in "
+             "conversion_dict.py: " + ", ".join(banked))
+
     # ---- step 2: template ----------------------------------------------------
     items = find_layout(base)
     text, used = write_template(base, refs, items, variables)

@@ -1,5 +1,5 @@
 {#- m5.cpt template of the QFlex gem5 machine, made by make_template.py
-    on Sun Nov 15 10:10:53 2026. Do not edit: edit the references,
+    on Mon Nov 16 07:41:07 2026. Do not edit: edit the references,
     conversion_dict.py or make_template.py and run it again.
     References: ref_1cpu_8gb.m5.cpt, ref_2cpu_8gb.m5.cpt, ref_4cpu_16gb.m5.cpt, ref_4cpu_4gb.m5.cpt, ref_4cpu_8gb.m5.cpt
     gem5 version tags: arm-ccregs arm-contextidr-el2 arm-gem5-gic-ext arm-gicv2-banked-regs arm-hdlcd-upgrade arm-miscreg-teehbr arm-sme2 arm-sve arm-sysreg-mapping-ns armv8 cpu-pid dvfs-perflevel etherswitch globals-to-root ide-dma-abort isa-is-simobject memory-per-range mempool-sections mempool-to-seworkload multiple-event-queues pci-config-pxcap process-fdmap-rename register-files remove-arm-cpsr-mode-miscreg riscv-dyn-vlen riscv-hext riscv-jvt riscv-pcstate riscv-senvcfg riscv-smrnmi riscv-vconf riscv-vext ruby-block-size-bytes smt-interrupts x86-add-tlb x86-add-xcr0
@@ -1569,25 +1569,25 @@ icc_ap0r0={{ cpu.v.get("misc:icc_ap0r0", "0") }}
 icc_ap0r1={{ cpu.v.get("misc:icc_ap0r1", "0") }}
 icc_ap0r2={{ cpu.v.get("misc:icc_ap0r2", "0") }}
 icc_ap0r3={{ cpu.v.get("misc:icc_ap0r3", "0") }}
-icc_ap1r0={{ cpu.v.get("misc:icc_ap1r0", "0") }}
-icc_ap1r0_ns=0
+icc_ap1r0=0
+icc_ap1r0_ns={{ cpu.v.get("misc:icc_ap1r0_ns", "0") }}
 icc_ap1r0_s=0
-icc_ap1r1={{ cpu.v.get("misc:icc_ap1r1", "0") }}
-icc_ap1r1_ns=0
+icc_ap1r1=0
+icc_ap1r1_ns={{ cpu.v.get("misc:icc_ap1r1_ns", "0") }}
 icc_ap1r1_s=0
-icc_ap1r2={{ cpu.v.get("misc:icc_ap1r2", "0") }}
-icc_ap1r2_ns=0
+icc_ap1r2=0
+icc_ap1r2_ns={{ cpu.v.get("misc:icc_ap1r2_ns", "0") }}
 icc_ap1r2_s=0
-icc_ap1r3={{ cpu.v.get("misc:icc_ap1r3", "0") }}
-icc_ap1r3_ns=0
+icc_ap1r3=0
+icc_ap1r3_ns={{ cpu.v.get("misc:icc_ap1r3_ns", "0") }}
 icc_ap1r3_s=0
 icc_asgi1r=0
 icc_bpr0={{ cpu.v.get("misc:icc_bpr0", "0") }}
-icc_bpr1={{ cpu.v.get("misc:icc_bpr1", "0") }}
-icc_bpr1_ns=0
+icc_bpr1=0
+icc_bpr1_ns={{ cpu.v.get("misc:icc_bpr1_ns", "0") }}
 icc_bpr1_s=0
-icc_ctlr={{ cpu.v.get("misc:icc_ctlr", "0") }}
-icc_ctlr_ns=0
+icc_ctlr=0
+icc_ctlr_ns={{ cpu.v.get("misc:icc_ctlr_ns", "0") }}
 icc_ctlr_s=0
 icc_dir=0
 icc_eoir0=0
@@ -1598,8 +1598,8 @@ icc_hsre=0
 icc_iar0=0
 icc_iar1=0
 icc_igrpen0={{ cpu.v.get("misc:icc_igrpen0", "0") }}
-icc_igrpen1={{ cpu.v.get("misc:icc_igrpen1", "0") }}
-icc_igrpen1_ns=0
+icc_igrpen1=0
+icc_igrpen1_ns={{ cpu.v.get("misc:icc_igrpen1_ns", "0") }}
 icc_igrpen1_s=0
 icc_mctlr=0
 icc_mgrpen1=0
@@ -1608,8 +1608,8 @@ icc_pmr={{ cpu.v.get("misc:icc_pmr", "0") }}
 icc_rpr=0
 icc_sgi0r=0
 icc_sgi1r=0
-icc_sre={{ cpu.v.get("misc:icc_sre", "0") }}
-icc_sre_ns=0
+icc_sre=0
+icc_sre_ns={{ cpu.v.get("misc:icc_sre_ns", "0") }}
 icc_sre_s=0
 ich_ap0r0=0
 ich_ap0r1=0

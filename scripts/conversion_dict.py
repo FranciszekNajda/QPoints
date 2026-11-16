@@ -211,6 +211,13 @@ entry(var="misc:cpsr", file="register-info.json", path="cpsr",
 # -> prrr_ns + nmrr_ns, FAR_EL1 -> dfar_ns + ifar_ns, AMAIR_EL1 (QEMU name
 # AMAIR0) -> amair0_ns + amair1_ns, DBGBVRn_EL1 -> dbgbvrn + dbgbxvrn.
 #
+# Banked registers: some GIC CPU interface registers have one copy per
+# security state (.banked64() / .banked() in misc.cc): ICC_IGRPEN1_EL1,
+# ICC_BPR1_EL1, ICC_CTLR_EL1, ICC_SRE_EL1, ICC_AP1Rn_EL1. gem5 reads the
+# non-secure copy (*_EL1_NS, stored in the AArch32 key with "_ns", e.g.
+# icc_igrpen1_ns); the key without "_ns" is never read. make_template.py
+# stops if a miscRegs variable has a "_ns" twin.
+#
 # QEMU names some EL1 registers by their AArch32 name (SCTLR, CPACR, VBAR,
 # CSSELR, ...).
 #
@@ -327,27 +334,27 @@ entry(var="misc:icc_ap0r2", file="register-info.json", path="ICC_AP0R2_EL1",
       transform="hex_to_int")
 entry(var="misc:icc_ap0r3", file="register-info.json", path="ICC_AP0R3_EL1",
       transform="hex_to_int")
-entry(var="misc:icc_ap1r0", file="register-info.json", path="ICC_AP1R0_EL1",
+entry(var="misc:icc_ap1r0_ns", file="register-info.json", path="ICC_AP1R0_EL1",
       transform="hex_to_int")
-entry(var="misc:icc_ap1r1", file="register-info.json", path="ICC_AP1R1_EL1",
+entry(var="misc:icc_ap1r1_ns", file="register-info.json", path="ICC_AP1R1_EL1",
       transform="hex_to_int")
-entry(var="misc:icc_ap1r2", file="register-info.json", path="ICC_AP1R2_EL1",
+entry(var="misc:icc_ap1r2_ns", file="register-info.json", path="ICC_AP1R2_EL1",
       transform="hex_to_int")
-entry(var="misc:icc_ap1r3", file="register-info.json", path="ICC_AP1R3_EL1",
+entry(var="misc:icc_ap1r3_ns", file="register-info.json", path="ICC_AP1R3_EL1",
       transform="hex_to_int")
 entry(var="misc:icc_bpr0", file="register-info.json", path="ICC_BPR0_EL1",
       transform="hex_to_int")
-entry(var="misc:icc_bpr1", file="register-info.json", path="ICC_BPR1_EL1",
+entry(var="misc:icc_bpr1_ns", file="register-info.json", path="ICC_BPR1_EL1",
       transform="hex_to_int")
-entry(var="misc:icc_ctlr", file="register-info.json", path="ICC_CTLR_EL1",
+entry(var="misc:icc_ctlr_ns", file="register-info.json", path="ICC_CTLR_EL1",
       transform="hex_to_int")
 entry(var="misc:icc_igrpen0", file="register-info.json", path="ICC_IGRPEN0_EL1",
       transform="hex_to_int")
-entry(var="misc:icc_igrpen1", file="register-info.json", path="ICC_IGRPEN1_EL1",
+entry(var="misc:icc_igrpen1_ns", file="register-info.json", path="ICC_IGRPEN1_EL1",
       transform="hex_to_int")
 entry(var="misc:icc_pmr", file="register-info.json", path="ICC_PMR_EL1",
       transform="hex_to_int")
-entry(var="misc:icc_sre", file="register-info.json", path="ICC_SRE_EL1",
+entry(var="misc:icc_sre_ns", file="register-info.json", path="ICC_SRE_EL1",
       transform="hex_to_int")
 entry(var="misc:l2actlr_el1", file="register-info.json", path="L2ACTLR",
       transform="hex_to_int")
