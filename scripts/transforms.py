@@ -18,6 +18,8 @@ Signature of every transform
            first, e.g. "0x00000000000000c6"; machine values are ints.
          - path is a list: a dict {name: value} of every listed name found in
            the dump ("z{i}" stands for z0, z1, ...).
+         For gic-info.json, a value may also be a list of hex strings (a
+         QEMU bitmap or byte array) or a plain number (num_irq, hppi_irq).
   ctx  a Context (below): the other registers of the same CPU, gem5's reset
        value of the variable, the gem5 register layout and the machine.
   returns the text written after "key=" in m5.cpt.
@@ -439,6 +441,283 @@ def counter_update_tick(src, ctx):
 
 
 # ===========================================================================
+# GICv3 (source: gic-info.json, written by parallel-qemu qflex-gic.c)
+# ===========================================================================
+# QEMU and gem5 describe the same GICv3 state but store it differently:
+#
+#   QEMU  bitmaps of 32-bit words, bit X = interrupt X (word X / 32, bit
+#         X % 32), written as hex strings; priorities as a list of bytes.
+#   gem5  one list entry per interrupt (std::vector serialized as a line of
+#         values separated by spaces): booleans as "true"/"false", the
+#         group, config, group modifier and NS access as small integers.
+#
+# Distributor (SPIs, [system.realview.gic.distributor]): the gem5 lists have
+# it_lines = 1020 entries, QEMU has num_irq = 288 interrupts. Entries 0..31
+# are unused by both (the SGI/PPI state is in the redistributors) and
+# entries num_irq..1019 do not exist in QEMU: all of them keep gem5's reset
+# value, taken from the template default (ctx.reset). Only the entries
+# 32..num_irq-1 come from QEMU.
+#
+# Redistributors (SGIs and PPIs, [...redistributors.<N>]): 32 entries, all
+# from QEMU (one 32-bit register per field).
+#
+# Pending state: the two models differ.
+#   QEMU  "pending" is the pending latch: the whole pending state of an
+#         edge-triggered interrupt, but for a level-sensitive one only what
+#         software set with GICD_ISPENDR. "level" is the current level of
+#         the input line. The pending state is pending | (level & ~edge).
+#   gem5  irqPending is that pending state; irqPendingIspendr says that a
+#         level-sensitive interrupt was made pending by software (gem5 then
+#         treats it as edge-triggered when it is taken or cleared).
+#   So: irqPending        = pending | (level & ~edge_trigger)
+#       irqPendingIspendr = pending & ~edge_trigger
+
+GIC_INTERNAL = 32          # SGIs (0-15) + PPIs (16-31)
+
+
+def _words(src):
+    """A QEMU bitmap (list of hex strings) -> list of ints."""
+    return [hexval(w) for w in src]
+
+
+def _bit(words, i):
+    """Bit of interrupt i in a QEMU bitmap given as a list of ints."""
+    return (words[i // 32] >> (i % 32)) & 1
+
+
+def _bool(b):
+    return "true" if b else "false"
+
+
+def _the_value(src):
+    """For the entries whose path is [<field>, "num_irq"]: the value of
+    <field> (the one key that is not num_irq)."""
+    keys = [k for k in src if k != "num_irq"]
+    if len(keys) != 1:
+        raise ConversionError(f"expected one field besides num_irq, got {keys}")
+    return src[keys[0]]
+
+
+def _spi_line(src, ctx, value_of):
+    """A distributor list: gem5's reset list (ctx.reset) with the entries
+    32..num_irq-1 replaced by value_of(i)."""
+    out = ctx.reset.split()
+    num_irq = src["num_irq"]
+    if num_irq > len(out):
+        raise ConversionError(f"QEMU has {num_irq} interrupts but the gem5 "
+                              f"GIC only {len(out)} (it_lines)")
+    for i in range(GIC_INTERNAL, num_irq):
+        out[i] = value_of(i)
+    return " ".join(out)
+
+
+def _private_line(ctx, value_of):
+    """A redistributor list: one value per SGI/PPI (32 entries)."""
+    n = len(ctx.reset.split())
+    if n != GIC_INTERNAL:
+        raise ConversionError(f"gem5 list has {n} entries, expected 32")
+    return " ".join(value_of(i) for i in range(GIC_INTERNAL))
+
+
+# ---- distributor control: GICD_CTLR (with DS=1) -----------------------------
+#   bit 0 EnableGrp0, bit 1 EnableGrp1(NS), bit 2 EnableGrp1S (RES0 with
+#   DS=1), bit 4 ARE, bit 6 DS. gem5 keeps each bit in a bool.
+
+def gicd_enable_grp0(src, ctx):
+    return _bool(bit(hexval(src), 0))
+
+
+def gicd_enable_grp1ns(src, ctx):
+    return _bool(bit(hexval(src), 1))
+
+
+def gicd_enable_grp1s(src, ctx):
+    return _bool(bit(hexval(src), 2))
+
+
+def gicd_are(src, ctx):
+    return _bool(bit(hexval(src), 4))
+
+
+def gicd_ds(src, ctx):
+    return _bool(bit(hexval(src), 6))
+
+
+# ---- distributor lists (path: [<QEMU field>, "num_irq"]) --------------------
+
+def spi_bitmap_int(src, ctx):
+    """QEMU bitmap -> gem5 list of 0/1 (irqGroup, irqConfig, irqGrpmod).
+    For irqConfig the encodings agree: 1 = edge (INT_EDGE_TRIGGERED),
+    0 = level (INT_LEVEL_SENSITIVE)."""
+    w = _words(_the_value(src))
+    return _spi_line(src, ctx, lambda i: str(_bit(w, i)))
+
+
+def spi_bitmap_bool(src, ctx):
+    """QEMU bitmap -> gem5 list of true/false (irqEnabled, irqActive)."""
+    w = _words(_the_value(src))
+    return _spi_line(src, ctx, lambda i: _bool(_bit(w, i)))
+
+
+def spi_pending(src, ctx):
+    """irqPending = pending | (level & ~edge_trigger), see above."""
+    p, l, e = (_words(src[k]) for k in ("pending", "level", "edge_trigger"))
+    return _spi_line(src, ctx, lambda i: _bool(
+        _bit(p, i) or (_bit(l, i) and not _bit(e, i))))
+
+
+def spi_pending_latch(src, ctx):
+    """irqPendingIspendr = pending & ~edge_trigger, see above."""
+    p, e = (_words(src[k]) for k in ("pending", "edge_trigger"))
+    return _spi_line(src, ctx, lambda i: _bool(_bit(p, i) and not _bit(e, i)))
+
+
+def spi_bytes(src, ctx):
+    """GICD_IPRIORITYR bytes -> gem5 irqPriority (decimal)."""
+    b = _words(_the_value(src))
+    return _spi_line(src, ctx, lambda i: str(b[i]))
+
+
+def spi_nsacr(src, ctx):
+    """GICD_NSACR, 2 bits per interrupt (16 per word) -> gem5 irqNsacr."""
+    w = _words(_the_value(src))
+    return _spi_line(src, ctx,
+                     lambda i: str((w[i // 16] >> (2 * (i % 16))) & 3))
+
+
+def spi_irouter(src, ctx):
+    """GICD_IROUTER (64-bit) -> gem5 irqAffinityRouting (decimal). Same bit
+    layout in both: Aff3 39:32, IRM 31, Aff2 23:16, Aff1 15:8, Aff0 7:0."""
+    r = _words(_the_value(src))
+    return _spi_line(src, ctx, lambda i: str(r[i]))
+
+
+# ---- redistributor (per CPU) -------------------------------------------------
+
+def ppi_bitmap_int(src, ctx):
+    """32-bit GICR register -> gem5 list of 0/1 (irqGroup, irqConfig,
+    irqGrpmod)."""
+    v = hexval(src)
+    return _private_line(ctx, lambda i: str(bit(v, i)))
+
+
+def ppi_bitmap_bool(src, ctx):
+    """32-bit GICR register -> gem5 list of true/false (irqEnabled,
+    irqActive)."""
+    v = hexval(src)
+    return _private_line(ctx, lambda i: _bool(bit(v, i)))
+
+
+def ppi_pending(src, ctx):
+    """irqPending = gicr_ipendr0 | (level & ~edge_trigger), see above."""
+    p, l, e = (hexval(src[k]) for k in ("gicr_ipendr0", "level",
+                                         "edge_trigger"))
+    return _private_line(ctx, lambda i: _bool(
+        bit(p, i) or (bit(l, i) and not bit(e, i))))
+
+
+def ppi_pending_latch(src, ctx):
+    """irqPendingIspendr = gicr_ipendr0 & ~edge_trigger, see above."""
+    p, e = (hexval(src[k]) for k in ("gicr_ipendr0", "edge_trigger"))
+    return _private_line(ctx, lambda i: _bool(bit(p, i) and not bit(e, i)))
+
+
+def ppi_bytes(src, ctx):
+    """GICR_IPRIORITYR bytes -> gem5 irqPriority (decimal)."""
+    b = _words(src)
+    return _private_line(ctx, lambda i: str(b[i]))
+
+
+def ppi_nsacr(src, ctx):
+    """GICR_NSACR: 2 bits for each SGI (0-15); PPIs have none (0)."""
+    v = hexval(src)
+    return _private_line(ctx, lambda i: str((v >> (2 * i)) & 3 if i < 16
+                                            else 0))
+
+
+def gicr_sleep(src, ctx):
+    """peInLowPowerState = GICR_WAKER.ProcessorSleep (bit 1). Linux clears
+    it at boot: while it is set, the CPU is not given interrupts."""
+    return _bool(bit(hexval(src), 1))
+
+
+def gicr_dpg0(src, ctx):
+    """GICR_CTLR.DPG0 (bit 24). Always 0 in QEMU (GICR_TYPER.DPGS = 0)."""
+    return _bool(bit(hexval(src), 24))
+
+
+def gicr_dpg1ns(src, ctx):
+    """GICR_CTLR.DPG1NS (bit 25)."""
+    return _bool(bit(hexval(src), 25))
+
+
+def gicr_dpg1s(src, ctx):
+    """GICR_CTLR.DPG1S (bit 26)."""
+    return _bool(bit(hexval(src), 26))
+
+
+# ---- CPU interface: highest-priority pending interrupt (hppi) ----------------
+# QEMU and gem5 cache the same thing per CPU: the best interrupt that is
+# pending, enabled, not active and in an enabled group. gem5 does not
+# recompute it on restore, so it is copied (path: hppi_irq, hppi_prio,
+# hppi_grp). QEMU sets prio = 0xff when nothing is pending and then leaves
+# an old INTID in irq: it means "none", which gem5 writes intid 1023
+# (spurious), prio 255. An LPI (INTID >= 8192) is not converted either.
+
+LPI_FIRST = 8192
+INTID_SPURIOUS = 1023
+
+
+def _hppi_none(src):
+    return hexval(src["hppi_prio"]) == 0xff or src["hppi_irq"] >= LPI_FIRST
+
+
+def hppi_intid(src, ctx):
+    return str(INTID_SPURIOUS if _hppi_none(src) else src["hppi_irq"])
+
+
+def hppi_prio(src, ctx):
+    return str(0xff if _hppi_none(src) else hexval(src["hppi_prio"]))
+
+
+def hppi_group(src, ctx):
+    """Same encoding in both: 0 = G0, 1 = G1 secure, 2 = G1 non-secure.
+    With no interrupt, gem5's reset value."""
+    return ctx.reset if _hppi_none(src) else str(src["hppi_grp"])
+
+
+# ---- CPU interrupt lines ([system.cpu_cluster.cpus<N>.interrupts]) -----------
+# QEMU: bits of CPUState.interrupt_request (include/exec/cpu-all.h,
+# target/arm/cpu.h). gem5: ArmISA::Interrupts, one bool per InterruptTypes
+# entry (src/arch/arm/interrupts.hh: RST, ABT, IRQ, FIQ, SEV, VIRT_IRQ,
+# VIRT_FIQ) and intStatus, the same as a bit mask (bit n = type n).
+# Other QEMU bits are QEMU-internal requests (exit TB, halt, ...).
+QEMU_TO_GEM5_INTERRUPT = {
+    0x0002: 2,     # CPU_INTERRUPT_HARD -> INT_IRQ
+    0x0010: 3,     # CPU_INTERRUPT_FIQ  -> INT_FIQ
+    0x0040: 5,     # CPU_INTERRUPT_VIRQ -> INT_VIRT_IRQ
+    0x0200: 6,     # CPU_INTERRUPT_VFIQ -> INT_VIRT_FIQ
+}
+
+
+def _raised(src):
+    req = hexval(src)
+    return {n for q, n in QEMU_TO_GEM5_INTERRUPT.items() if req & q}
+
+
+def irq_lines(src, ctx):
+    """interrupts: one true/false per gem5 interrupt type."""
+    raised = _raised(src)
+    n = len(ctx.reset.split())
+    return " ".join(_bool(i in raised) for i in range(n))
+
+
+def irq_status(src, ctx):
+    """intStatus: bit n set if interrupt type n is raised."""
+    return str(sum(1 << n for n in _raised(src)))
+
+
+# ===========================================================================
 # Every transform, by the name used in conversion_dict.py
 # ===========================================================================
 TRANSFORMS = {f.__name__: f for f in [
@@ -446,4 +725,11 @@ TRANSFORMS = {f.__name__: f for f in [
     pc_plus_4, cpsr_without_flags, cc_regs, int_regs, vec_regs, vec_elems,
     pred_regs, evstream_enabled, evstream_next_tick, evstream_transition_to,
     evstream_transition_bit, counter_value, counter_update_tick,
+    # GICv3
+    gicd_enable_grp0, gicd_enable_grp1ns, gicd_enable_grp1s, gicd_are, gicd_ds,
+    spi_bitmap_int, spi_bitmap_bool, spi_pending, spi_pending_latch, spi_bytes,
+    spi_nsacr, spi_irouter,
+    ppi_bitmap_int, ppi_bitmap_bool, ppi_pending, ppi_pending_latch, ppi_bytes,
+    ppi_nsacr, gicr_sleep, gicr_dpg0, gicr_dpg1ns, gicr_dpg1s,
+    hppi_intid, hppi_prio, hppi_group, irq_lines, irq_status,
 ]}

@@ -118,6 +118,7 @@ SCOPE_OF = {
     ("cpu", ".xc.0"): "xc",              # registers and PC of the CPU
     ("cpu", ".isa.miscRegs"): "misc",    # system registers
     ("cpu", ".power_state"): "power",
+    ("cpu", ".interrupts"): "intr",       # IRQ/FIQ lines of the CPU
     ("redist", ""): "redist",
     ("cpuif", ""): "cpuif",
 }
@@ -540,8 +541,6 @@ def write_template(base, refs, items, variables):
         # ---- the sections of one kind, for every CPU --------------------
         _, kind, order, suffixes = item
         cpus = "cpus|reverse" if order == "descending" else "cpus"
-        if kind in ("redist", "cpuif"):
-            w("{# TODO GICv3: state not dumped by QEMU yet, gem5 reset values #}")
         w(f"{{% for cpu in {cpus} %}}")
         first = base.cpus[0]
         for suffix in suffixes:
@@ -688,7 +687,8 @@ def main():
 
     loops = [i for i in items if i[0] == "loop"]
     per_cpu = sum(1 for v in used if v.split(":")[0].split(".")[0] in
-                  {"cpu", "xc", "misc", "power", "redist", "cpuif", "timer"})
+                  {"cpu", "xc", "misc", "power", "intr", "redist", "cpuif",
+                   "timer"})
     print(f"template: {tpl_path}")
     print(f"  {sum(1 for i in items if i[0] == 'section')} sections written "
           f"once, {len(loops)} per-CPU loops:")

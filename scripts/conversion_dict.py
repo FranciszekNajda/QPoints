@@ -31,6 +31,7 @@ Variable names: "<scope>:<key>"
     xc         [system.cpu_cluster.cpus<N>.xc.0]            registers, PC
     misc       [system.cpu_cluster.cpus<N>.isa.miscRegs]    system registers
     power      [system.cpu_cluster.cpus<N>.power_state]
+    intr       [system.cpu_cluster.cpus<N>.interrupts]       IRQ/FIQ lines
     redist     [system.realview.gic.redistributors.<N>]
     cpuif      [system.realview.gic.cpuInterface.<N>]
     timer      [system.realview.generic_timer.pe_implementation<N>]
@@ -52,6 +53,13 @@ Fields of an entry
                                      for a per-CPU variable, the registers of
                                      the same CPU; for a variable that exists
                                      once, the registers of CPU 0
+               "gic-info.json"       the QEMU GICv3 dump of the snapshot
+                                     (written next to register-info.json);
+                                     for a per-CPU variable, the entry of
+                                     the same CPU in its "cpus" list; for a
+                                     variable that exists once, its top-level
+                                     keys and the keys of "gicd" (the
+                                     distributor)
                "machine.yaml"        the device tree of the QEMU machine
                                      (convert.py --yaml): "num_cpus" (number
                                      of cpu@N nodes) or "ram_bytes" (size of
@@ -63,7 +71,8 @@ Fields of an entry
                                      not change the template.
   path       the name of the value in that file: a register name, a list of
              register names given to the transform together ("z{i}" means
-             z0, z1, ...), or a key of "machine.yaml" / MACHINE
+             z0, z1, ...), a key (or list of keys) of gic-info.json, or a
+             key of "machine.yaml" / MACHINE
   transform  the function of transforms.py that turns the value into the
              text written in m5.cpt
   default    only when the source has no value. Not given: gem5's reset
@@ -78,7 +87,8 @@ Fields of an entry
 CONVERSION = {}
 
 # Possible values of the "file" field
-FILES = {"register-info.json", "machine.yaml", "conversion_dict.py", None}
+FILES = {"register-info.json", "gic-info.json", "machine.yaml",
+         "conversion_dict.py", None}
 
 
 def entry(var, file, path, transform, default=None, note=None):
@@ -551,16 +561,113 @@ entry(var="timer.phys_el1_timer:_counterLimit", file="register-info.json",
 # The EL2 and EL3 timers keep gem5's reset value (no EL2/EL3 in QEMU).
 
 # ===========================================================================
-# Per CPU: GIC
+# GICv3 (source: gic-info.json)
 # ===========================================================================
-# The GIC distributor and redistributors are not in the QEMU dump yet: they
-# keep gem5's reset values (all interrupts disabled) until the GICv3 work.
-# peInLowPowerState is already a variable: it is the first value the GIC
-# conversion will set (Linux clears GICR_WAKER.ProcessorSleep at boot).
+# QEMU and gem5 describe the same GICv3: revision 3, one security state
+# (GICD_CTLR.DS = 1), affinity routing always on, the same trigger and group
+# encodings. They only store the state differently (QEMU bitmaps, gem5 one
+# entry per interrupt): see the GICv3 section of transforms.py.
+# convert.py checks the assumptions (revision, DS, ARE, number of lines and
+# CPUs, unused group modifier / NS access, SPI targets) before converting.
+#
 # The GIC CPU interface registers (ICC_*) are system registers: they are in
 # the system register list above.
-entry(var="redist:peInLowPowerState", file=None, path=None, transform=None,
-      note="TODO GICv3: Linux clears GICR_WAKER.ProcessorSleep")
+#
+# Not converted (gem5 reset values): the ITS and LPIs (GICR_CTLR.EnableLPIs,
+# GICR_PROPBASER/PENDBASER, the ITS section). They are only needed when a
+# device uses MSIs (virtio-pci); convert.py warns when LPIs are enabled.
+
+# ---- Distributor: SPIs, [system.realview.gic.distributor] -----------------
+# Entries 32..num_irq-1 come from QEMU, the others keep gem5's reset value.
+D = "system.realview.gic.distributor"
+entry(var=f"{D}:ARE", file="gic-info.json", path="gicd_ctlr",
+      transform="gicd_are", note="affinity routing, always 1 (checked)")
+entry(var=f"{D}:DS", file="gic-info.json", path="gicd_ctlr",
+      transform="gicd_ds", note="single security state, 1 (checked)")
+entry(var=f"{D}:EnableGrp1S", file="gic-info.json", path="gicd_ctlr",
+      transform="gicd_enable_grp1s", note="RES0 with DS=1 (checked)")
+entry(var=f"{D}:EnableGrp1NS", file="gic-info.json", path="gicd_ctlr",
+      transform="gicd_enable_grp1ns")
+entry(var=f"{D}:EnableGrp0", file="gic-info.json", path="gicd_ctlr",
+      transform="gicd_enable_grp0")
+entry(var=f"{D}:irqGroup", file="gic-info.json", path=["group", "num_irq"],
+      transform="spi_bitmap_int")
+entry(var=f"{D}:irqEnabled", file="gic-info.json",
+      path=["enabled", "num_irq"], transform="spi_bitmap_bool")
+entry(var=f"{D}:irqPending", file="gic-info.json",
+      path=["pending", "level", "edge_trigger", "num_irq"],
+      transform="spi_pending",
+      note="pending latch | (line level & level-sensitive)")
+entry(var=f"{D}:irqPendingIspendr", file="gic-info.json",
+      path=["pending", "edge_trigger", "num_irq"],
+      transform="spi_pending_latch",
+      note="level-sensitive interrupts made pending by software")
+entry(var=f"{D}:irqActive", file="gic-info.json",
+      path=["active", "num_irq"], transform="spi_bitmap_bool")
+entry(var=f"{D}:irqPriority", file="gic-info.json",
+      path=["gicd_ipriority", "num_irq"], transform="spi_bytes")
+entry(var=f"{D}:irqConfig", file="gic-info.json",
+      path=["edge_trigger", "num_irq"], transform="spi_bitmap_int",
+      note="1 = edge, 0 = level in both")
+entry(var=f"{D}:irqGrpmod", file="gic-info.json",
+      path=["grpmod", "num_irq"], transform="spi_bitmap_int",
+      note="0 with DS=1 (checked)")
+entry(var=f"{D}:irqNsacr", file="gic-info.json",
+      path=["gicd_nsacr", "num_irq"], transform="spi_nsacr",
+      note="0 with DS=1 (checked)")
+entry(var=f"{D}:irqAffinityRouting", file="gic-info.json",
+      path=["gicd_irouter", "num_irq"], transform="spi_irouter",
+      note="target CPU affinity, same layout (targets checked)")
+
+# ---- Redistributor of each CPU: SGIs and PPIs ------------------------------
+entry(var="redist:peInLowPowerState", file="gic-info.json",
+      path="gicr_waker", transform="gicr_sleep",
+      note="GICR_WAKER.ProcessorSleep, cleared by Linux at boot")
+entry(var="redist:irqGroup", file="gic-info.json", path="gicr_igroupr0",
+      transform="ppi_bitmap_int")
+entry(var="redist:irqEnabled", file="gic-info.json", path="gicr_ienabler0",
+      transform="ppi_bitmap_bool")
+entry(var="redist:irqPending", file="gic-info.json",
+      path=["gicr_ipendr0", "level", "edge_trigger"], transform="ppi_pending")
+entry(var="redist:irqPendingIspendr", file="gic-info.json",
+      path=["gicr_ipendr0", "edge_trigger"], transform="ppi_pending_latch")
+entry(var="redist:irqActive", file="gic-info.json", path="gicr_iactiver0",
+      transform="ppi_bitmap_bool")
+entry(var="redist:irqPriority", file="gic-info.json", path="gicr_ipriorityr",
+      transform="ppi_bytes")
+entry(var="redist:irqConfig", file="gic-info.json", path="edge_trigger",
+      transform="ppi_bitmap_int", note="SGIs always edge")
+entry(var="redist:irqGrpmod", file="gic-info.json", path="gicr_igrpmodr0",
+      transform="ppi_bitmap_int", note="0 with DS=1 (checked)")
+entry(var="redist:irqNsacr", file="gic-info.json", path="gicr_nsacr",
+      transform="ppi_nsacr", note="0 with DS=1 (checked)")
+entry(var="redist:DPG1S", file="gic-info.json", path="gicr_ctlr",
+      transform="gicr_dpg1s")
+entry(var="redist:DPG1NS", file="gic-info.json", path="gicr_ctlr",
+      transform="gicr_dpg1ns")
+entry(var="redist:DPG0", file="gic-info.json", path="gicr_ctlr",
+      transform="gicr_dpg0")
+entry(var="redist:EnableLPIs", file=None, path=None, transform=None,
+      note="LPIs not converted (no ITS state); convert.py warns if enabled")
+
+# ---- CPU interface of each CPU: cached highest-priority pending interrupt --
+# gem5 does not recompute it on restore: without it, an interrupt pending
+# at snapshot time would wait for the next GIC event.
+entry(var="cpuif:hppi.intid", file="gic-info.json",
+      path=["hppi_irq", "hppi_prio"], transform="hppi_intid",
+      note="1023 when nothing is pending (QEMU prio 0xff) or for an LPI")
+entry(var="cpuif:hppi.prio", file="gic-info.json",
+      path=["hppi_irq", "hppi_prio"], transform="hppi_prio")
+entry(var="cpuif:hppi.group", file="gic-info.json",
+      path=["hppi_irq", "hppi_prio", "hppi_grp"], transform="hppi_group")
+
+# ---- IRQ/FIQ lines of each CPU, [system.cpu_cluster.cpus<N>.interrupts] ----
+# Raised by the GIC; still raised at snapshot time if the guest had masked
+# interrupts (PSTATE.I = 1). VIRQ/VFIQ must be 0 (no EL2, checked).
+entry(var="intr:interrupts", file="gic-info.json", path="interrupt_request",
+      transform="irq_lines")
+entry(var="intr:intStatus", file="gic-info.json", path="interrupt_request",
+      transform="irq_status")
 
 # ===========================================================================
 # Machine (values that exist once)
@@ -583,4 +690,3 @@ entry(var="system.realview.sys_counter:_updateTick",
       file="conversion_dict.py", path="restore_tick",
       transform="counter_update_tick",
       note="the tick at which _value is valid: the restore tick")
-      

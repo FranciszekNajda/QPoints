@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Convert the CPU state of a QEMU snapshot into a gem5 checkpoint (m5.cpt).
+"""Convert the CPU and GIC state of a QEMU snapshot into a gem5 checkpoint
+(m5.cpt).
 
 The files of the conversion
 ---------------------------
@@ -20,6 +21,9 @@ Inputs
 ------
   register-info.json   the QEMU register dump of the snapshot (written by
                        parallel-qemu in <snapshot>.gem/)
+  --gic                the QEMU GICv3 dump of the same snapshot (default:
+                       gic-info.json next to register-info.json, where
+                       parallel-qemu writes it)
   --yaml               the device tree of the QEMU machine (dtc -O yaml). It
                        gives the CPU count and the RAM size. Use the same YAML
                        as for the gem5 restore (run_gem5.sh --yaml): gem5
@@ -43,10 +47,12 @@ Steps
   2. Check: same CPU count in the dump and the YAML; the template has every
      variable of the dictionary; the snapshot is in a state the conversion
      supports (AArch64, no EL2/EL3 state, SME ZA off, consistent SVE length,
-     counter frequency of the gem5 machine). Any problem stops the script: a
+     counter frequency of the gem5 machine; a GICv3 like gem5's, see
+     check_gic). Any problem stops the script: a
      wrong checkpoint would make gem5 simulate a different guest without any
      error.
-  3. For every variable and every CPU: read the source value, apply the
+  3. For every variable and every CPU: read the source value (from the
+     register dump, the GIC dump, the YAML or a constant), apply the
      transform. If the source has no value: the entry's default if it has
      one, otherwise nothing is given and the template writes gem5's reset
      value.
@@ -78,7 +84,8 @@ from transforms import ConversionError, Context      # noqa: E402
 # Variable scopes that have one value per CPU (the part of a variable name
 # before ":" and before the first "."; see conversion_dict.py). Same list as
 # in make_template.py.
-PER_CPU_SCOPES = {"cpu", "xc", "misc", "power", "redist", "cpuif", "timer"}
+PER_CPU_SCOPES = {"cpu", "xc", "misc", "power", "intr", "redist", "cpuif",
+                  "timer"}
 
 # A variable in the template: {{ cpu.v.get("name", "default") }} or
 # {{ v.get("name", "default") }} (see make_template.py jinja_value)
@@ -169,6 +176,18 @@ def check_snapshot(cpus, machine):
         for n in ("TCR2_EL1", "PIR_EL1", "PIRE0_EL1"):
             if h(r, n):
                 errors.append(f"cpu{i}: {n}={r[n]} (feature not converted)")
+        # CPU affinity: gem5 does not restore MPIDR, it computes it from the
+        # CPU index (single cluster: Aff0 = index, bit 31 = 1). QEMU virt
+        # with GICv3 gives the same up to 16 CPUs (clusters of 16). Linux
+        # read MPIDR at boot and uses it to address CPUs: IPIs (the target
+        # is computed at each send, so no GIC check can see it) and SPI
+        # routing. With another affinity in gem5 they would be lost and the
+        # guest would hang. Fix if needed: build the gem5 CPUs in clusters
+        # of 16 (the cluster number becomes Aff1).
+        mpidr = h(r, "MPIDR_EL1")
+        if "MPIDR_EL1" in r and mpidr != (0x80000000 | i):
+            errors.append(f"cpu{i}: MPIDR_EL1={mpidr:#x} but gem5 gives this "
+                          f"CPU {0x80000000 | i:#x} (more than 16 CPUs?)")
         # Counter frequency: the gem5 machine counts at counter_freq (set in
         # qflex_system.py); if QEMU counted at another one, the guest's
         # time and timer deadlines would be wrong.
@@ -182,14 +201,6 @@ def warnings_snapshot(cpus, conversion, defaults):
     """Things worth knowing that do not stop the conversion."""
     warns = []
     h = lambda r, n: int(r[n], 16) if n in r else None
-    # gem5 does not restore MPIDR: it computes it from the CPU index
-    # (Aff0 = index, bit 31 = 1). QEMU virt with GICv3 does the same up to
-    # 16 CPUs; beyond, the guest would see other CPU numbers.
-    for i, r in enumerate(cpus):
-        mpidr = h(r, "MPIDR_EL1")
-        if mpidr is not None and mpidr != (0x80000000 | i):
-            warns.append(f"cpu{i}: MPIDR_EL1={mpidr:#x}, gem5 will use "
-                         f"{0x80000000 | i:#x}")
     # The system counter is shared: CNTPCT of CPU 0 is used for all CPUs.
     pcts = {h(r, "CNTPCT_EL0") for r in cpus}
     if len(pcts) > 1:
@@ -199,19 +210,116 @@ def warnings_snapshot(cpus, conversion, defaults):
 
 
 # ===========================================================================
+# Checks on the GIC dump
+# ===========================================================================
+
+def gem5_affinity(index):
+    """Affinity gem5 gives to CPU index (Aff3.Aff2.Aff1.Aff0 as one 32-bit
+    value, as in GICD_IROUTER without IRM): a single cluster, Aff0 = index.
+    QEMU virt (GICv3) gives the same up to 16 CPUs (clusters of 16)."""
+    return index
+
+
+def check_gic(gic, gic_cpus, cpus, defaults):
+    """Return the list of errors: GIC states the conversion does not
+    support. Each check matches an assumption of the GICv3 entries of
+    conversion_dict.py (see also the GIC tables of the documentation)."""
+    errors = []
+    h = lambda v: int(v, 16)
+    if gic.get("format") != "qemu-gicv3-dump":
+        return [f"gic-info.json: unknown format {gic.get('format')!r}"]
+    d = gic["gicd"]
+    # Same GIC model as gem5's Gicv3(gicv4=False): GICv3 frames (0x20000
+    # per redistributor), one security state.
+    if gic["revision"] != 3:
+        errors.append(f"GIC revision {gic['revision']}, gem5 is a GICv3 "
+                      "(gicv4=False): use gic-version=3 in QEMU")
+    if gic["security_extn"]:
+        errors.append("GIC has security extensions; gem5 runs without "
+                      "SECURITY (DS=1)")
+    ctlr = h(d["gicd_ctlr"])
+    if not (ctlr >> 4) & 1 or not (ctlr >> 6) & 1 or (ctlr >> 2) & 1:
+        errors.append(f"GICD_CTLR={d['gicd_ctlr']}: expected ARE=1, DS=1, "
+                      "EnableGrp1S=0")
+    # One redistributor per CPU, CPU entries 0..N-1
+    if gic["num_cpu"] != len(cpus) or \
+            [c["cpu_id"] for c in gic_cpus] != list(range(len(cpus))):
+        errors.append(f"GIC has {gic['num_cpu']} CPUs, the register dump "
+                      f"{len(cpus)}")
+    # The QEMU interrupts must fit in gem5's distributor lists (it_lines)
+    lines = len(defaults.get("system.realview.gic.distributor:irqGroup",
+                             "").split())
+    if gic["num_irq"] > lines:
+        errors.append(f"QEMU has {gic['num_irq']} interrupts, the gem5 GIC "
+                      f"{lines} (it_lines)")
+    # Group modifier and NS access only matter with two security states:
+    # with DS=1 they must be 0, otherwise the guest relies on a state that
+    # gem5 (DS=1) ignores.
+    nonzero = lambda l: any(h(x) for x in l)
+    if nonzero(d["grpmod"]) or nonzero(d["gicd_nsacr"]):
+        errors.append("GICD_IGRPMODR/GICD_NSACR not zero with DS=1")
+    for c in gic_cpus:
+        if h(c["gicr_igrpmodr0"]) or h(c["gicr_nsacr"]):
+            errors.append(f"cpu{c['cpu_id']}: GICR_IGRPMODR0/GICR_NSACR not "
+                          "zero with DS=1")
+        # virtual interrupt lines: EL2 only, which QEMU does not run
+        if h(c["interrupt_request"]) & (0x0040 | 0x0200):
+            errors.append(f"cpu{c['cpu_id']}: virtual IRQ/FIQ raised "
+                          f"(interrupt_request={c['interrupt_request']})")
+    # Error status registers: gem5 does not keep them (RAZ)
+    for c in [d] + gic_cpus:
+        key = "gicd_statusr" if c is d else "gicr_statusr"
+        if nonzero(c[key]):
+            errors.append(f"{key} not zero: {c[key]}")
+    # Every enabled SPI must be routed to a CPU that exists in gem5;
+    # otherwise gem5 keeps it pending for ever (Gicv3Distributor::route).
+    enabled = [h(w) for w in d["enabled"]]
+    targets = {gem5_affinity(i) for i in range(len(cpus))}
+    for irq in range(32, gic["num_irq"]):
+        if not (enabled[irq // 32] >> (irq % 32)) & 1:
+            continue
+        r = h(d["gicd_irouter"][irq])
+        if (r >> 31) & 1:
+            errors.append(f"SPI {irq}: 1-of-N routing (IRM=1) not supported")
+            continue
+        aff = ((r >> 32) & 0xff) << 24 | (r & 0xffffff)
+        if aff not in targets:
+            errors.append(f"SPI {irq} routed to affinity {aff:#x}, which no "
+                          "gem5 CPU has")
+    return errors
+
+
+def warnings_gic(gic_cpus):
+    """GIC state that is not converted but does not stop the conversion."""
+    warns = []
+    lpi = [c["cpu_id"] for c in gic_cpus if int(c["gicr_ctlr"], 16) & 1]
+    if lpi:
+        warns.append(f"LPIs enabled on CPUs {lpi} (GICR_CTLR.EnableLPIs): the "
+                     "ITS and LPI state are not converted, so MSI interrupts "
+                     "(virtio-pci) will not be delivered in gem5")
+    for c in gic_cpus:
+        if c["hppi_irq"] >= 8192 and int(c["hppi_prio"], 16) != 0xff:
+            warns.append(f"cpu{c['cpu_id']}: pending LPI {c['hppi_irq']} not "
+                         "converted")
+    return warns
+
+
+# ===========================================================================
 # Conversion of the variables
 # ===========================================================================
 
-def read_source(entry, regs, machine, constants):
+def read_source(entry, sources, machine, constants):
     """The source value of one dictionary entry, or None if there is none.
 
       file None                   not converted yet -> None
       file "machine.yaml"         machine[path], e.g. machine["ram_bytes"]
       file "conversion_dict.py"   constants[path] (conversion_dict.MACHINE)
-      file "register-info.json"   path is a register name -> its value (None
-                                  if absent); path is a list -> {name: value}
-                                  of the names found ("{i}" in a name stands
-                                  for 0..63, e.g. "z{i}")"""
+      file "register-info.json"   sources[file], a {name: value} dict (the
+      or "gic-info.json"          registers or the GIC entry of the CPU being
+                                  converted, see main): path is a name -> its
+                                  value (None if absent); path is a list ->
+                                  {name: value} of the names found ("{i}" in
+                                  a name stands for 0..63, e.g. "z{i}")"""
     file, path = entry["file"], entry["path"]
     if file is None:
         return None
@@ -219,8 +327,9 @@ def read_source(entry, regs, machine, constants):
         return machine[path]
     if file == "conversion_dict.py":
         return constants[path]
-    if file != "register-info.json":
+    if file not in sources:
         fail(f"unknown source file {file}")
+    regs = sources[file]
     if isinstance(path, str):
         return regs.get(path)
     found = {}
@@ -246,12 +355,13 @@ def source_names(entry):
     return out
 
 
-def convert_variable(var, entry, regs, defaults, cdict, machine, stats):
+def convert_variable(var, entry, sources, defaults, cdict, machine, stats):
     """The value (m5.cpt text) of one variable, for one CPU or for the
     machine, or None to let the template write gem5's reset value.
-    stats records which variables were converted and which kept a default,
-    for the report."""
-    src = read_source(entry, regs, machine, cdict.MACHINE)
+    sources: {"register-info.json": registers, "gic-info.json": GIC entry}
+    of the CPU (or of the machine). stats records which variables were
+    converted and which kept a default, for the report."""
+    src = read_source(entry, sources, machine, cdict.MACHINE)
     if src is None:
         # no value in the source: the entry's explicit default if it has
         # one, otherwise gem5's reset value (written by the template)
@@ -260,7 +370,8 @@ def convert_variable(var, entry, regs, defaults, cdict, machine, stats):
     fn = transforms.TRANSFORMS.get(entry["transform"])
     if fn is None:
         fail(f"{var}: transform {entry['transform']} not in transforms.py")
-    ctx = Context(regs, defaults.get(var), cdict.GEM5_LAYOUT, machine, var)
+    ctx = Context(sources["register-info.json"], defaults.get(var),
+                  cdict.GEM5_LAYOUT, machine, var)
     try:
         value = fn(src, ctx)
     except ConversionError as e:
@@ -269,7 +380,8 @@ def convert_variable(var, entry, regs, defaults, cdict, machine, stats):
     return value
 
 
-def convert_all(conversion, per_cpu, regs, defaults, cdict, machine, stats):
+def convert_all(conversion, per_cpu, sources, defaults, cdict, machine,
+                stats):
     """{variable: value} for the per-CPU variables (per_cpu=True) or the
     variables that exist once, leaving out the ones that keep gem5's reset
     value (the template writes it)."""
@@ -277,7 +389,8 @@ def convert_all(conversion, per_cpu, regs, defaults, cdict, machine, stats):
     for var, e in conversion.items():
         if is_per_cpu(var) != per_cpu:
             continue
-        value = convert_variable(var, e, regs, defaults, cdict, machine, stats)
+        value = convert_variable(var, e, sources, defaults, cdict, machine,
+                                 stats)
         if value is not None:
             values[var] = value
     return values
@@ -289,6 +402,8 @@ def main():
     ap = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("register_info", help="QEMU register-info.json")
+    ap.add_argument("--gic", help="QEMU gic-info.json (default: next to "
+                    "register_info)")
     ap.add_argument("--yaml", required=True, help="machine device tree (YAML)")
     ap.add_argument("-o", "--output", required=True, help="m5.cpt to write")
     ap.add_argument("--template",
@@ -306,6 +421,21 @@ def main():
     if [c["cpu_id"] for c in dump_cpus] != list(range(len(dump_cpus))):
         fail("cpu_id values of the dump are not 0..N-1")
     cpus = [c["registers"] for c in dump_cpus]
+    # The GIC dump: {"revision", "num_irq", ..., "gicd": {distributor},
+    # "cpus": [{"cpu_id": 0, redistributor...}, ...]}. parallel-qemu writes
+    # it next to register-info.json. Without it the GIC would stay at gem5's
+    # reset (all interrupts disabled) and the guest would hang: required.
+    gic_path = args.gic or os.path.join(
+        os.path.dirname(os.path.abspath(args.register_info)), "gic-info.json")
+    if not os.path.exists(gic_path):
+        fail(f"{gic_path} not found (GIC dump of the snapshot, written by "
+             "parallel-qemu since qflex-gic.c; give it with --gic)")
+    gic = json.load(open(gic_path))
+    gic_cpus = sorted(gic.get("cpus", []), key=lambda c: c["cpu_id"])
+    # Source of the GIC variables that exist once: the top-level values
+    # (num_irq, ...) and the distributor fields, in one dict.
+    gic_global = {k: v for k, v in gic.items() if k not in ("cpus", "gicd")}
+    gic_global.update(gic.get("gicd", {}))
     cdict = load_module(args.dict, "conversion_dict")
     conversion = cdict.CONVERSION
     template_text = open(args.template).read()
@@ -325,24 +455,32 @@ def main():
     if missing:
         fail("conversion_dict.py has variables that are not in the template "
              f"(run make_template.py again): {missing}")
-    errors = check_snapshot(cpus, machine)
+    errors = check_snapshot(cpus, machine) + check_gic(gic, gic_cpus, cpus,
+                                                       defaults)
     if errors:
         fail("the snapshot is in a state the conversion does not support:\n  "
              + "\n  ".join(errors))
-    for w in warnings_snapshot(cpus, conversion, defaults):
+    for w in warnings_snapshot(cpus, conversion, defaults) + warnings_gic(
+            gic_cpus):
         print(f"WARNING: {w}")
 
     # ---- step 3: values ------------------------------------------------------
     stats = {}
-    # per-CPU variables: computed from the registers of each CPU
+    # per-CPU variables: computed from the registers and the GIC entry of
+    # each CPU
     cpu_ctx = [{"index": i,
-                "v": convert_all(conversion, True, regs, defaults, cdict,
-                                 machine, stats)}
+                "v": convert_all(conversion, True,
+                                 {"register-info.json": regs,
+                                  "gic-info.json": gic_cpus[i]},
+                                 defaults, cdict, machine, stats)}
                for i, regs in enumerate(cpus)]
-    # variables that exist once: QEMU values are taken from CPU 0 (e.g. the
-    # system counter, shared by all CPUs)
-    global_values = convert_all(conversion, False, cpus[0], defaults, cdict,
-                                machine, stats)
+    # variables that exist once: register values are taken from CPU 0 (e.g.
+    # the system counter, shared by all CPUs), GIC values from the
+    # distributor
+    global_values = convert_all(conversion, False,
+                                {"register-info.json": cpus[0],
+                                 "gic-info.json": gic_global},
+                                defaults, cdict, machine, stats)
 
     # ---- step 4: render ------------------------------------------------------
     # Same Jinja settings as make_template.py, whose re-render test proved
@@ -365,7 +503,7 @@ def main():
     # ---- report --------------------------------------------------------------
     used = set().union(*(source_names(e) for e in conversion.values()))
     # QEMU registers deliberately not used (see conversion_dict.py):
-    # MPIDR (computed by gem5), CNTVCT (= counter - CNTVOFF), vg (checked),
+    # MPIDR (computed by gem5, checked equal), CNTVCT (= counter - CNTVOFF), vg (checked),
     # lower-case fpcr/fpsr (duplicates of FPCR/FPSR), NEON views v/q/d/s/h/b
     # (contained in z), EL2/EL3 registers (checked zero), and the ID /
     # implementation registers that keep gem5's values (AArch32 ID_*, MVFR*,
@@ -379,8 +517,8 @@ def main():
                     and int(v, 16) != 0)
     converted = stats.get("converted", set())
     kept = stats.get("default", set())
-    print(f"converted {len(cpus)} CPUs, RAM {ram_bytes / 2**30:g} GiB "
-          f"-> {args.output}")
+    print(f"converted {len(cpus)} CPUs, RAM {ram_bytes / 2**30:g} GiB, "
+          f"GIC {gic['num_irq']} interrupts -> {args.output}")
     print(f"  {len(converted)} variables from the snapshot or the machine")
     print(f"  {len(kept)} variables at their default:")
     for var in sorted(kept):
@@ -399,4 +537,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-    
