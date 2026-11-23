@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Convert the CPU and GIC state of a QEMU snapshot into a gem5 checkpoint
-(m5.cpt).
+"""Convert the CPU, GIC and disk device state of a QEMU snapshot into a gem5
+checkpoint (m5.cpt).
 
 The files of the conversion
 ---------------------------
@@ -24,6 +24,10 @@ Inputs
   --gic                the QEMU GICv3 dump of the same snapshot (default:
                        gic-info.json next to register-info.json, where
                        parallel-qemu writes it)
+  --virtio             the QEMU virtio-pci dump of the same snapshot
+                       (default: virtio-info.json next to
+                       register-info.json). The snapshot must come from
+                       qflex run with --gem5 (legacy virtio-pci disk).
   --yaml               the device tree of the QEMU machine (dtc -O yaml). It
                        gives the CPU count and the RAM size. Use the same YAML
                        as for the gem5 restore (run_gem5.sh --yaml): gem5
@@ -48,7 +52,8 @@ Steps
      variable of the dictionary; the snapshot is in a state the conversion
      supports (AArch64, no EL2/EL3 state, SME ZA off, consistent SVE length,
      counter frequency of the gem5 machine; a GICv3 like gem5's, see
-     check_gic). Any problem stops the script: a
+     check_gic; a disk like gem5's, see check_virtio). Any problem stops
+     the script: a
      wrong checkpoint would make gem5 simulate a different guest without any
      error.
   3. For every variable and every CPU: read the source value (from the
@@ -295,13 +300,129 @@ def warnings_gic(gic_cpus):
     lpi = [c["cpu_id"] for c in gic_cpus if int(c["gicr_ctlr"], 16) & 1]
     if lpi:
         warns.append(f"LPIs enabled on CPUs {lpi} (GICR_CTLR.EnableLPIs): the "
-                     "ITS and LPI state are not converted, so MSI interrupts "
-                     "(virtio-pci) will not be delivered in gem5")
+                     "ITS and LPI state are not converted. Fine as long as no "
+                     "device sends MSIs (checked: no MSI-X vector on the "
+                     "disk, no pending LPI)")
+    return warns
+
+
+# ===========================================================================
+# Checks on the virtio dump (the disk)
+# ===========================================================================
+
+def virtio_source(dev):
+    """The disk of virtio-info.json as one flat dict, the source of the
+    "virtio-info.json" entries of conversion_dict.py:
+    "pci.<key>", "virtio.<key>" and "queue<N>.<key>"
+    (e.g. "pci.config", "virtio.guest_features", "queue0.desc_addr")."""
+    src = {f"pci.{k}": v for k, v in dev["pci"].items()}
+    src.update({f"virtio.{k}": v for k, v in dev["virtio"].items()
+                if k != "queues"})
+    for q in dev["virtio"]["queues"]:
+        src.update({f"queue{q['index']}.{k}": v for k, v in q.items()})
+    return src
+
+
+def check_virtio(virtio, gic_cpus, machine, defaults):
+    """Return the list of errors: disk states the conversion does not
+    support. gem5's disk is PciVirtIO + VirtIOBlock (qflex_system.py): the
+    legacy virtio-pci interface, one queue, INTx. Each check matches an
+    assumption of the disk entries of conversion_dict.py."""
+    h = lambda v: int(v, 16)
+    if virtio.get("format") != "qemu-virtio-dump":
+        return [f"virtio-info.json: unknown format {virtio.get('format')!r}"]
+    devs = virtio["devices"]
+    # gem5's machine has exactly one PCI device, the disk: any other
+    # virtio-pci device (e.g. a NIC) would not exist after the restore.
+    if len(devs) != 1 or "virtio" not in devs[0]:
+        return [f"{len(devs)} virtio-pci devices, gem5 has one (the disk): "
+                "take the snapshot with qflex --gem5 (no NIC)"]
+    dev = devs[0]
+    p, v = dev["pci"], dev["virtio"]
+    errors = []
+    # Transport: legacy only (gem5's PciVirtIO), at gem5's slot, INTx only.
+    if not p["legacy"] or p["modern"]:
+        errors.append(f"disk is not legacy-only virtio-pci (legacy="
+                      f"{p['legacy']}, modern={p['modern']}): use qflex "
+                      "--gem5 (disable-legacy=off,disable-modern=on)")
+    if (p["bus"], p["slot"], p["function"]) != (0, machine["pci_disk_slot"],
+                                                 0):
+        errors.append(f"disk at {p['bus']:02x}:{p['slot']:02x}."
+                      f"{p['function']}, gem5 puts it at 00:"
+                      f"{machine['pci_disk_slot']:02x}.0 (another PCI device "
+                      "before it?)")
+    if p["nvectors"]:
+        errors.append(f"disk has {p['nvectors']} MSI-X vectors: gem5's "
+                      "PciVirtIO uses INTx (vectors=0)")
+    # One BAR: BAR0, I/O (the legacy register window)
+    bars = [b for b in p["bars"] if h(b["size"])]
+    if [(b["index"], b["type"]) for b in bars] != [(0, 1)]:
+        errors.append(f"disk BARs {[(b['index'], b['type'], b['size']) for b in bars]}, "
+                      "gem5's PciVirtIO has one I/O BAR0")
+    # PCI header: gem5 keeps 64 bytes and no capability list (Status.CapList,
+    # bit 4 of byte 6): a capability would be lost.
+    cfg = p["config"]
+    header = len(defaults.get("system.pci_devices:_config.data", "").split())
+    if len(cfg) < header:
+        errors.append(f"PCI config space of {len(cfg)} bytes, gem5 needs "
+                      f"{header}")
+    elif (cfg[6] >> 4) & 1:
+        errors.append("disk has PCI capabilities (Status.CapList = 1): gem5 "
+                      "does not restore them")
+    # Virtio device: a block device, no interrupt pending (gem5 does not
+    # checkpoint interruptDeliveryPending), supported features.
+    if v["device_id"] != 2:
+        errors.append(f"virtio device id {v['device_id']}, gem5's disk is a "
+                      "block device (2)")
+    if h(v["isr"]):
+        errors.append(f"ISR={v['isr']}: a disk interrupt was pending, gem5 "
+                      "cannot restore it (take the snapshot again)")
+    extra = h(v["guest_features"]) & ~machine["virtio_blk_features"]
+    if extra:
+        errors.append(f"guest features {v['guest_features']} include "
+                      f"{extra:#x}, not supported by gem5's VirtIOBlock")
+    # One queue, of gem5's size, with the legacy ring layout gem5 recomputes
+    # from the descriptor table address (VirtQueue::setAddress): avail ring
+    # right after the descriptors (16 bytes each), used ring at the next
+    # 4 KiB boundary after the avail ring (flags, idx, num entries of 2
+    # bytes; no used_event field without EVENT_IDX).
+    qs = v["queues"]
+    if len(qs) != 1:
+        errors.append(f"disk has {len(qs)} queues, gem5's VirtIOBlock one")
+    if v["queue_sel"] >= len(qs):
+        errors.append(f"queue_sel={v['queue_sel']} out of range")
+    for q in qs:
+        n = q["num"]
+        if n != machine["virtio_queue_size"]:
+            errors.append(f"queue {q['index']}: {n} entries, gem5's queueSize "
+                          f"is {machine['virtio_queue_size']}")
+        desc, avail, used = (h(q[k]) for k in ("desc_addr", "avail_addr",
+                                                "used_addr"))
+        if not desc:
+            continue                    # queue not set up by the guest
+        align = lambda a: (a + 4095) & ~4095
+        if desc & 4095 or avail != desc + 16 * n or \
+                used != align(avail + 4 + 2 * n):
+            errors.append(f"queue {q['index']}: ring layout desc={q['desc_addr']} "
+                          f"avail={q['avail_addr']} used={q['used_addr']} is not "
+                          "the legacy layout gem5 recomputes")
+        # No request in flight (popped by QEMU, not completed: QEMU would
+        # resubmit it from its own state, gem5 cannot) and none waiting in
+        # the avail ring (gem5 only looks at the ring when notified).
+        last = q["last_avail_idx"]
+        if q["used_idx"] != last:
+            errors.append(f"queue {q['index']}: {(last - q['used_idx']) % 65536} "
+                          "request(s) in flight (take the snapshot again)")
+        if q["avail_idx"] != last:
+            errors.append(f"queue {q['index']}: {(q['avail_idx'] - last) % 65536} "
+                          "request(s) waiting in the avail ring (take the "
+                          "snapshot again)")
+    # LPIs: the ITS is not converted, so no LPI may be pending.
     for c in gic_cpus:
         if c["hppi_irq"] >= 8192 and int(c["hppi_prio"], 16) != 0xff:
-            warns.append(f"cpu{c['cpu_id']}: pending LPI {c['hppi_irq']} not "
-                         "converted")
-    return warns
+            errors.append(f"cpu{c['cpu_id']}: LPI {c['hppi_irq']} pending, "
+                          "LPIs are not converted")
+    return errors
 
 
 # ===========================================================================
@@ -404,6 +525,8 @@ def main():
     ap.add_argument("register_info", help="QEMU register-info.json")
     ap.add_argument("--gic", help="QEMU gic-info.json (default: next to "
                     "register_info)")
+    ap.add_argument("--virtio", help="QEMU virtio-info.json (default: next "
+                    "to register_info)")
     ap.add_argument("--yaml", required=True, help="machine device tree (YAML)")
     ap.add_argument("-o", "--output", required=True, help="m5.cpt to write")
     ap.add_argument("--template",
@@ -436,6 +559,17 @@ def main():
     # (num_irq, ...) and the distributor fields, in one dict.
     gic_global = {k: v for k, v in gic.items() if k not in ("cpus", "gicd")}
     gic_global.update(gic.get("gicd", {}))
+    # The virtio dump: {"devices": [{"pci": {...}, "virtio": {..., "queues":
+    # [...]}}]}. Without it the disk would stay at gem5's reset and the
+    # guest's first disk access would hang: required.
+    virtio_path = args.virtio or os.path.join(
+        os.path.dirname(os.path.abspath(args.register_info)),
+        "virtio-info.json")
+    if not os.path.exists(virtio_path):
+        fail(f"{virtio_path} not found (virtio-pci dump of the snapshot, "
+             "written by parallel-qemu since qflex-virtio.c; give it with "
+             "--virtio)")
+    virtio = json.load(open(virtio_path))
     cdict = load_module(args.dict, "conversion_dict")
     conversion = cdict.CONVERSION
     template_text = open(args.template).read()
@@ -455,8 +589,9 @@ def main():
     if missing:
         fail("conversion_dict.py has variables that are not in the template "
              f"(run make_template.py again): {missing}")
-    errors = check_snapshot(cpus, machine) + check_gic(gic, gic_cpus, cpus,
-                                                       defaults)
+    errors = (check_snapshot(cpus, machine)
+              + check_gic(gic, gic_cpus, cpus, defaults)
+              + check_virtio(virtio, gic_cpus, machine, defaults))
     if errors:
         fail("the snapshot is in a state the conversion does not support:\n  "
              + "\n  ".join(errors))
@@ -476,10 +611,12 @@ def main():
                for i, regs in enumerate(cpus)]
     # variables that exist once: register values are taken from CPU 0 (e.g.
     # the system counter, shared by all CPUs), GIC values from the
-    # distributor
+    # distributor, disk values from the single virtio-pci device (checked)
     global_values = convert_all(conversion, False,
                                 {"register-info.json": cpus[0],
-                                 "gic-info.json": gic_global},
+                                 "gic-info.json": gic_global,
+                                 "virtio-info.json":
+                                     virtio_source(virtio["devices"][0])},
                                 defaults, cdict, machine, stats)
 
     # ---- step 4: render ------------------------------------------------------
@@ -518,7 +655,8 @@ def main():
     converted = stats.get("converted", set())
     kept = stats.get("default", set())
     print(f"converted {len(cpus)} CPUs, RAM {ram_bytes / 2**30:g} GiB, "
-          f"GIC {gic['num_irq']} interrupts -> {args.output}")
+          f"GIC {gic['num_irq']} interrupts, legacy virtio-pci disk "
+          f"-> {args.output}")
     print(f"  {len(converted)} variables from the snapshot or the machine")
     print(f"  {len(kept)} variables at their default:")
     for var in sorted(kept):

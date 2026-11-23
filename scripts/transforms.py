@@ -718,6 +718,25 @@ def irq_status(src, ctx):
 
 
 # ===========================================================================
+# Disk (virtio-info.json)
+# ===========================================================================
+
+def pci_config_header(src, ctx):
+    """_config.data: the PCI config header, one decimal per byte.
+
+    QEMU dumps the config space from byte 0 (the whole space or the
+    64-byte header, depending on the parallel-qemu version); gem5 keeps the
+    header only (PCIConfig, 64 bytes; capabilities are separate keys). Its
+    length is taken from gem5's reset value, and the bytes after it must
+    not hold a capability (checked in convert.py: Status.CapList = 0)."""
+    n = len(ctx.reset.split())
+    if len(src) < n or any(not 0 <= b <= 255 for b in src[:n]):
+        raise ConversionError(f"config space of {len(src)} bytes, gem5 "
+                              f"needs {n}")
+    return fmt_bytes(src[:n])
+
+
+# ===========================================================================
 # Every transform, by the name used in conversion_dict.py
 # ===========================================================================
 TRANSFORMS = {f.__name__: f for f in [
@@ -732,4 +751,6 @@ TRANSFORMS = {f.__name__: f for f in [
     ppi_bitmap_int, ppi_bitmap_bool, ppi_pending, ppi_pending_latch, ppi_bytes,
     ppi_nsacr, gicr_sleep, gicr_dpg0, gicr_dpg1ns, gicr_dpg1s,
     hppi_intid, hppi_prio, hppi_group, irq_lines, irq_status,
+    # disk
+    pci_config_header,
 ]}

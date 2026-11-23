@@ -60,6 +60,12 @@ Fields of an entry
                                      variable that exists once, its top-level
                                      keys and the keys of "gicd" (the
                                      distributor)
+               "virtio-info.json"    the QEMU virtio-pci dump of the snapshot
+                                     (written next to register-info.json),
+                                     for the disk: its keys flattened as
+                                     "pci.<key>", "virtio.<key>" and
+                                     "queue<N>.<key>" (see convert.py
+                                     virtio_source)
                "machine.yaml"        the device tree of the QEMU machine
                                      (convert.py --yaml): "num_cpus" (number
                                      of cpu@N nodes) or "ram_bytes" (size of
@@ -71,8 +77,8 @@ Fields of an entry
                                      not change the template.
   path       the name of the value in that file: a register name, a list of
              register names given to the transform together ("z{i}" means
-             z0, z1, ...), a key (or list of keys) of gic-info.json, or a
-             key of "machine.yaml" / MACHINE
+             z0, z1, ...), a key (or list of keys) of gic-info.json or
+             virtio-info.json, or a key of "machine.yaml" / MACHINE
   transform  the function of transforms.py that turns the value into the
              text written in m5.cpt
   default    only when the source has no value. Not given: gem5's reset
@@ -87,8 +93,8 @@ Fields of an entry
 CONVERSION = {}
 
 # Possible values of the "file" field
-FILES = {"register-info.json", "gic-info.json", "machine.yaml",
-         "conversion_dict.py", None}
+FILES = {"register-info.json", "gic-info.json", "virtio-info.json",
+         "machine.yaml", "conversion_dict.py", None}
 
 
 def entry(var, file, path, transform, default=None, note=None):
@@ -153,6 +159,17 @@ MACHINE = {
     # Frequency of the gem5 system counter (QEMU_CNTFRQ_HZ in
     # qflex_system.py, = QEMU's CNTFRQ_EL0).
     "counter_freq": 62_500_000,
+    # The disk (convert.py check_virtio). gem5's machine has one PCI device,
+    # PciVirtIO + VirtIOBlock (qflex_system.py): attachPciDevice puts the
+    # first device at slot 1 (RealView.py), and its queue has queueSize
+    # entries (VirtIO.py, default 128, not changed by qflex_system.py).
+    "pci_disk_slot": 1,
+    "virtio_queue_size": 128,
+    # Features the guest may have negotiated: the ones QEMU offers with the
+    # --gem5 options (commands/gem5_profile.py) and that gem5's VirtIOBlock
+    # handles: SEG_MAX (2), GEOMETRY (4), BLK_SIZE (6), FLUSH (9),
+    # TOPOLOGY (10). The others are turned off in QEMU (gem5_profile.py).
+    "virtio_blk_features": 0x654,
 }
 
 
@@ -581,8 +598,11 @@ entry(var="timer.phys_el1_timer:_counterLimit", file="register-info.json",
 # the system register list above.
 #
 # Not converted (gem5 reset values): the ITS and LPIs (GICR_CTLR.EnableLPIs,
-# GICR_PROPBASER/PENDBASER, the ITS section). They are only needed when a
-# device uses MSIs (virtio-pci); convert.py warns when LPIs are enabled.
+# GICR_PROPBASER/PENDBASER, the ITS section). QEMU keeps an ITS (the guest
+# kernel panics at boot without it) and Linux enables LPIs, but no device
+# sends MSIs: the disk is legacy virtio-pci with INTx (no MSI-X vector,
+# checked) and there is no NIC. convert.py warns when LPIs are enabled and
+# stops if an LPI is pending.
 
 # ---- Distributor: SPIs, [system.realview.gic.distributor] -----------------
 # Entries 32..num_irq-1 come from QEMU, the others keep gem5's reset value.
@@ -675,6 +695,44 @@ entry(var="intr:interrupts", file="gic-info.json", path="interrupt_request",
       transform="irq_lines")
 entry(var="intr:intStatus", file="gic-info.json", path="interrupt_request",
       transform="irq_status")
+
+# ===========================================================================
+# Disk: legacy virtio-pci block device (virtio-info.json)
+# ===========================================================================
+# gem5's PciVirtIO is the legacy virtio-pci interface, the one QEMU exposes
+# with --gem5 (commands/gem5_profile.py). The guest configured the device at
+# boot; this state lives in the device, not in RAM, so without it gem5's
+# disk would be at reset while the guest driver believes it is ready.
+# convert.py checks the assumptions before converting (check_virtio: one
+# legacy virtio-blk at the gem5 slot, INTx, a single I/O BAR, no PCI
+# capability, ISR 0, supported features, one queue of gem5's size, legacy
+# ring layout, no request in flight or waiting).
+#
+# Not converted (gem5 reset values): the PCI capabilities (pmcap, msicap,
+# msixcap, pxcap: the device has none, checked) and the disk content (the
+# image is extracted from the snapshot and given to gem5 with --disk-image).
+P = "system.pci_devices"
+entry(var=f"{P}:_config.data", file="virtio-info.json", path="pci.config",
+      transform="pci_config_header",
+      note="the 64-byte PCI header (ids, Command, BAR0, interrupt pin). gem5 "
+      "recomputes its BARs from it on restore (PciEndpoint::unserialize)")
+entry(var=f"{P}.vio:guestFeatures", file="virtio-info.json",
+      path="virtio.guest_features", transform="hex_to_int",
+      note="features the driver accepted (checked against "
+      "MACHINE['virtio_blk_features'])")
+entry(var=f"{P}.vio:_deviceStatus", file="virtio-info.json",
+      path="virtio.status", transform="hex_to_int",
+      note="0x7 (ACKNOWLEDGE, DRIVER, DRIVER_OK) once the driver is ready; "
+      "legacy virtio has no FEATURES_OK")
+entry(var=f"{P}.vio:_queueSelect", file="virtio-info.json",
+      path="virtio.queue_sel", transform="to_str")
+entry(var=f"{P}.vio._queues.0:_address", file="virtio-info.json",
+      path="queue0.desc_addr", transform="hex_to_int",
+      note="descriptor table address in bytes (gem5 multiplies the legacy "
+      "PFN by 4096 when the guest writes it); the rings follow it")
+entry(var=f"{P}.vio._queues.0:_last_avail", file="virtio-info.json",
+      path="queue0.last_avail_idx", transform="to_str",
+      note="next avail entry the device processes; private to the device")
 
 # ===========================================================================
 # Machine (values that exist once)
